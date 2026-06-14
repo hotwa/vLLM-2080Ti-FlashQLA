@@ -36,7 +36,10 @@ COPY . .
 # Build environment variables
 ENV TORCH_CUDA_ARCH_LIST=7.5
 ENV FLASHINFER_ENABLE_AOT=1
-ENV MAX_JOBS=4
+# Use all available CPU cores for parallel compilation (max 16 to avoid OOM)
+# GitHub Actions has 2-4 cores, local machines may have more
+ARG MAX_JOBS=16
+ENV MAX_JOBS=${MAX_JOBS}
 ENV CMAKE_BUILD_TYPE=Release
 ENV TORCH_EXTENSIONS_DIR=/opt/torch_extensions_cache
 ENV VLLM_TARGET_DEVICE=cuda

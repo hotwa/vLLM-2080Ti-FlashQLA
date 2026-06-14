@@ -54,6 +54,10 @@ jobs:
             type=semver,pattern={{major}}.{{minor}}
             type=sha,prefix=
 
+      - name: Get CPU cores for parallel compilation
+        id: cpu
+        run: echo "cores=$(nproc)" >> $GITHUB_OUTPUT
+
       - name: Build and push Docker image
         uses: docker/build-push-action@v5
         with:
@@ -63,6 +67,8 @@ jobs:
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
+          build-args: |
+            MAX_JOBS=${{ steps.cpu.outputs.cores }}
 
       - name: Generate build summary
         if: github.event_name != 'pull_request'
