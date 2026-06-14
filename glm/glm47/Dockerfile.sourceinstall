@@ -1,0 +1,90 @@
+# syntax=docker/dockerfile:1.7
+
+ARG CUDA_IMAGE=nvidia/cuda:12.8.0-devel-ubuntu22.04
+FROM ${CUDA_IMAGE}
+
+SHELL ["/bin/bash", "-lc"]
+
+ENV DEBIAN_FRONTEND=noninteractive \
+    PIP_DISABLE_PIP_VERSION_CHECK=1 \
+    PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    VIRTUAL_ENV=/opt/venv \
+    PATH="/opt/venv/bin:$PATH"
+
+# ---- PyTorch (CUDA 12.8 -> cu128 wheels) ----
+ARG TORCH_CUDA_INDEX=https://download.pytorch.org/whl/cu128
+ARG TORCH_VER=2.9.1+cu128
+
+# ---- Transformers ----
+ARG TRANSFORMERS_VER=5.0.0
+
+# ---- vLLM: build from source to ensure sm75 kernels exist ----
+# NOTE:
+# - If you still hit "marlin not supported on sm75" at runtime, bump this ref
+#   to a newer tag/commit where "Marlin for Turing (sm75)" is included.
+ARG VLLM_GIT_REF=v0.15.0
+
+# ---- Optional: FlashInfer ----
+# On Turing/2080Ti, you can leave it off initially to reduce moving parts.
+ARG INSTALL_FLASHINFER=0
+ARG FLASHINFER_VER=0.6.2
+
+# ---- Critical for 2080Ti (sm75) ----
+ARG TORCH_CUDA_ARCH_LIST="7.5;7.5+PTX"
+ENV TORCH_CUDA_ARCH_LIST=${TORCH_CUDA_ARCH_LIST} \
+    MAX_JOBS=8 \
+    VLLM_LOG_MODEL_INSPECTION=1
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    python3 python3-venv python3-pip python3-dev \
+    build-essential git curl ca-certificates \
+    cmake ninja-build pkg-config \
+    libnuma-dev \
+    libffi-dev \
+    libxcb1 libx11-6 libxext6 libxrender1 libglib2.0-0 libgl1 \
+    && rm -rf /var/lib/apt/lists/*
+
+RUN python3 -m venv /opt/venv && \
+    pip install -U pip setuptools wheel packaging
+
+# ---- Install torch explicitly (avoid surprise torch variants) ----
+RUN pip install -U --index-url ${TORCH_CUDA_INDEX} \
+    "torch==${TORCH_VER}"
+
+# ---- Transformers / runtime deps you likely need for GLM ----
+RUN pip install -U --pre \
+    "transformers==${TRANSFORMERS_VER}" \
+    "accelerate>=0.33" \
+    "sentencepiece" \
+    "protobuf" \
+    "safetensors" \
+    "huggingface_hub" \
+    "einops"
+
+# ---- Build & install vLLM from source (ensures sm75 is compiled in) ----
+RUN git clone --depth=1 --branch ${VLLM_GIT_REF} https://github.com/vllm-project/vllm.git /tmp/vllm && \
+    cd /tmp/vllm && \
+    pip install . && \
+    rm -rf /tmp/vllm
+
+# ---- Optional FlashInfer (enable only after base path works) ----
+RUN if [ "${INSTALL_FLASHINFER}" = "1" ]; then \
+      pip install -U \
+        "flashinfer-python==${FLASHINFER_VER}" \
+        "flashinfer-cubin==${FLASHINFER_VER}" ; \
+    fi
+
+# ---- Cleanup caches (keeps image smaller) ----
+RUN rm -rf /root/.cache/pip \
+           /root/.cache/torch_extensions \
+           /root/.cache/vllm \
+           /root/.cache/flashinfer \
+           /tmp/torchinductor_root* /tmp/torchinductor_* 2>/dev/null || true
+
+RUN pip install -U --pre \
+    "transformers==${TRANSFORMERS_VER}"
+
+# RUN pip uninstall -y opencv-python-headless opencv-python || true
+
+CMD ["bash"]

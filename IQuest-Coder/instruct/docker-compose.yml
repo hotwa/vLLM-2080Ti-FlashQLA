@@ -1,0 +1,87 @@
+# IQuest-Coder 本地推理服务栈
+# 架构: Claude Code → LiteLLM (4000) → vLLM (8000)
+
+services:
+  # 1) tailscale sidecar：拿到稳定的 TS IP
+  tailscale-gw:
+    image: tailscale/tailscale:latest
+    container_name: tailscale-gw
+    hostname: llm-gw
+    environment:
+      - TS_AUTHKEY=${TS_AUTHKEY}
+      - TS_STATE_DIR=/var/lib/tailscale
+      - TS_USERSPACE=false
+      - TS_EXTRA_ARGS=--login-server=${HEADSCALE_URL} --accept-dns=false
+    volumes:
+      - ./tailscale/state:/var/lib/tailscale
+    devices:
+      - /dev/net/tun:/dev/net/tun
+    cap_add:
+      - NET_ADMIN
+    restart: unless-stopped
+    networks:
+      - llmnet
+
+  # 2) vLLM：IQuest 40B 推理后端
+  iquest-40b-nvfp4:
+    image: hotwa/vllm-iquest-40b:v0.13.0-6fb9c
+    container_name: vllm-iquest-40b-nvfp4
+    runtime: nvidia
+    environment:
+      - NVIDIA_VISIBLE_DEVICES=all
+      - HUGGING_FACE_HUB_TOKEN=${HF_TOKEN:-}
+      - HF_HOME=/root/.cache/huggingface
+      - TRANSFORMERS_OFFLINE=0
+      - HF_HUB_DISABLE_TELEMETRY=1
+      - HF_ENDPOINT=${HF_ENDPOINT:-https://huggingface.co}
+    volumes:
+      - ~/.cache:/root/.cache
+    command: >
+      vllm serve Firworks/IQuest-Coder-V1-40B-Instruct-nvfp4
+      --revision abee7579ccc817f3db76494c8bccbdab1a14c795
+      --trust-remote-code
+      --dtype auto
+      --max-model-len 131072
+      --gpu-memory-utilization 0.90
+      --max-num-seqs 1
+      --enable-chunked-prefill
+      --enable-auto-tool-choice
+      --tool-call-parser hermes
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+    shm_size: "16gb"
+    ulimits:
+      memlock: -1
+      stack: 67108864
+    restart: unless-stopped
+    networks:
+      - llmnet
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://127.0.0.1:8000/health >/dev/null"]
+      interval: 5s
+      timeout: 3s
+      retries: 240
+      start_period: 600s
+
+  # 3) LiteLLM：Anthropic API 兼容层 + 路由
+  #    Claude Code 直接连接此服务，无需 anthropic-proxy
+  litellm-router:
+    image: docker.litellm.ai/berriai/litellm:main-stable
+    container_name: litellm-router
+    network_mode: "service:tailscale-gw"
+    volumes:
+      - ./litellm-config.yaml:/app/config.yaml:ro
+    command: ["--config", "/app/config.yaml", "--host", "0.0.0.0", "--port", "4000"]
+    restart: unless-stopped
+    depends_on:
+      iquest-40b-nvfp4:
+        condition: service_healthy
+
+networks:
+  llmnet:
+    driver: bridge

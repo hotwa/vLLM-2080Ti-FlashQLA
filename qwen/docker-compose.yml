@@ -1,0 +1,94 @@
+services:
+  qwenserver:
+    build:
+      context: .
+      dockerfile: Dockerfile.night
+    image: hotwa/vllm:nightly
+    container_name: qwenserver
+    ports:
+      - "8001:8000"
+    gpus: all
+    volumes:
+      - ~/.cache/huggingface:/root/.cache/huggingface
+    env_file:
+      - ./.env
+    command:
+      # 模型更换为 NVFP4-MTP 版本
+      - "osoleve/Qwen3.5-27B-NVFP4-MTP"
+      - "--trust-remote-code"
+      - "--served-model-name"
+      - "Qwen3.5-27B"
+      # 量化方式改为 modelopt（NVFP4）
+      - "--quantization"
+      - "modelopt"
+      # 必须开启：跳过视觉编码器，仅文本模型
+      - "--language-model-only"
+      # 工具调用与推理解析
+      - "--enable-auto-tool-choice"
+      - "--tool-call-parser"
+      - "qwen3_coder"
+      - "--reasoning-parser"
+      - "qwen3"
+      # 并发控制：单卡 32GB，保守设 1 避免 OOM
+      - "--max-num-seqs"
+      - "2"
+      # 显存利用率（模型 19GB + KV cache，剩余约 13GB）
+      - "--gpu-memory-utilization"
+      - "0.92"
+      # KV cache 数据类型：无需指定 fp8（NVFP4 仅为权重格式），注释掉或保留 auto
+      - "--kv-cache-dtype"
+      - "fp8"
+      # MTP 投机解码配置：根据模型卡片，num_speculative_tokens 必须为 1
+      - "--speculative-config"
+      - '{"method":"mtp","num_speculative_tokens":2}'
+      # 最大批处理 token 数（与 max-model-len 配合）
+      - "--max-num-batched-tokens"
+      - "32768"
+      # 明确设置最大上下文长度（单卡 32GB 推荐 8192，稳定后可逐步提升）
+      - "--max-model-len"
+      - "262144"
+      # 网络服务
+      - "--host"
+      - "0.0.0.0"
+      - "--port"
+      - "8000"
+    environment:
+      - VLLM_ALLOW_LONG_MAX_MODEL_LEN=1
+      - HF_HUB_ENABLE_HF_TRANSFER=0
+      # - HF_ENDPOINT=https://hf-mirror.com
+      - HF_TOKEN=${HF_TOKEN}
+    shm_size: "16gb"
+    ulimits:
+      memlock: -1
+      stack: 67108864
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://127.0.0.1:8000/ping  >/dev/null"]
+      interval: 5s
+      timeout: 3s
+      retries: 240
+      start_period: 600s
+
+  litellm-router:
+    image: docker.litellm.ai/berriai/litellm:main-stable
+    container_name: litellm-router
+    ports:
+      - "4000:4000"
+    volumes:
+      - ./litellm-config.yaml:/app/config.yaml:ro
+    env_file:
+      - ./.env.litellm
+    environment:
+      - VLLM_API_BASE=http://qwenserver:8000/v1
+      - LITELLM_DISABLE_STREAMING_LOGGING=true
+    command:
+      - "--config"
+      - "/app/config.yaml"
+      - "--host"
+      - "0.0.0.0"
+      - "--port"
+      - "4000"
+    depends_on:
+      qwenserver:
+        condition: service_healthy
+    restart: unless-stopped

@@ -1,0 +1,69 @@
+services:
+  sglang:
+    image: lmsysorg/sglang:nightly-dev-20260317-1eea7448
+    container_name: sglang-qwen35-27b-fp8
+    restart: unless-stopped
+    gpus: all
+
+    ipc: host
+    shm_size: "16gb"
+    ulimits:
+      memlock: -1
+      stack: 67108864
+
+    ports:
+      - "8000:8000"
+
+    volumes:
+      - ~/.cache/huggingface:/root/.cache/huggingface
+      - ./chat_templates:/app/chat_templates:ro
+
+    env_file:
+      - ./.env
+
+    environment:
+      - PYTORCH_ALLOC_CONF=expandable_segments:True
+      - NCCL_P2P_DISABLE=1
+      - NCCL_IB_DISABLE=1
+      - NVIDIA_VISIBLE_DEVICES=all
+      - NVIDIA_DRIVER_CAPABILITIES=compute,utility
+      # - SGLANG_ENABLE_JIT_DEEPGEMM=0
+
+    entrypoint: ["python3", "-m", "sglang.launch_server"]
+    command:
+      - --model-path
+      - Qwen/Qwen3.5-27B-FP8
+      - --trust-remote-code
+      - --served-model-name
+      - Qwen3.5-27B
+      - --chat-template
+      - /app/chat_templates/qwen35_opencode_xml_mm.jinja
+      # - --reasoning-parser
+      # - qwen3
+      - --tool-call-parser
+      - qwen3_coder
+      - --skip-server-warmup
+      - --host
+      - 0.0.0.0
+      - --port
+      - "8000"
+      - --attention-backend
+      - triton
+      - --fp8-gemm-backend
+      - auto
+      - --kv-cache-dtype
+      - fp8_e4m3
+      - --context-length
+      - "262144"
+      - --max-running-requests
+      - "4"
+      - --mem-fraction-static
+      - "0.85"
+      - --max-prefill-tokens
+      - "4096"
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://127.0.0.1:8000/health >/dev/null || exit 1"]
+      interval: 5s
+      timeout: 3s
+      retries: 120
+      start_period: 180s

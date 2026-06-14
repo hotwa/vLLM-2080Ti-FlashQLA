@@ -1,0 +1,38 @@
+general_settings:
+  health_check_details: false
+  # 可保留禁用 passthrough（你不走 /anthropic 前缀的话无所谓）
+  disable_anthropic_experimental_pass_through: true
+
+litellm_settings:
+  master_key: os.environ/LITELLM_MASTER_KEY
+  drop_params: true
+  disable_streaming_logging: true
+
+router_settings:
+  routing_strategy: least-busy
+  num_retries: 2
+  timeout: 180
+
+model_list:
+  # 让 Claude Code 的“官方模型名”直接命中
+  - model_name: claude-3-5-sonnet
+    litellm_params:
+      model: openai/glm-4.7-flash
+      api_base: http://glmserver:8000/v1
+      api_key: anything
+      timeout: 600
+      drop_params: true
+    model_info:
+      max_input_tokens: 120000
+      max_tokens: 131072
+
+  # - model_name: claude-3-5-haiku
+  #   litellm_params:
+  #     model: openai/glm-4.7-flash
+  #     api_base: http://glmserver:8080/v1
+  #     api_key: anything
+  #     timeout: 180
+  #     drop_params: true
+  #   model_info:
+  #     max_input_tokens: 131072
+  #     max_tokens: 202752

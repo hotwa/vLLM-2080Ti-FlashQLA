@@ -1,0 +1,68 @@
+# =========================
+# LiteLLM Proxy Config (OpenAI-only for llama.cpp)
+# =========================
+
+general_settings:
+  health_check_details: false
+  disable_anthropic_experimental_pass_through: true  # 🔴 强制禁用 Anthropic passthrough
+
+litellm_settings:
+  master_key: os.environ/LITELLM_MASTER_KEY
+
+  # --- 全局可靠性配置 ---
+  num_retries: 2                      # 失败重试次数
+  request_timeout: 180                # 硬超时（秒）
+  allowed_fails: 2                    # 失败超过此阈值进入 cooldown
+  drop_params: true
+  set_verbose: false
+
+  # 🔴 关键：关闭 streaming 日志 & passthrough
+  disable_streaming_logging: true
+  disable_anthropic_experimental_pass_through: true  # 🔴 全局禁用 Anthropic passthrough
+
+router_settings:
+  routing_strategy: least-busy        # 使用 least-busy 策略更稳定
+  num_retries: 2                      # Router 层重试
+  timeout: 180                        # Router 超时（秒）
+
+model_list:
+  # ============================================================
+  # 主力模型（vLLM，OpenAI 端点，避开 Anthropic passthrough）
+  # ============================================================
+
+  - model_name: claude-3-5-sonnet
+    litellm_params:
+      model: openai/glm-4.6v
+      api_base: http://glm-4.6v-awq:8000/v1
+      api_key: anything
+      timeout: 600
+      drop_params: true
+    model_info:
+      max_tokens: 131072        # vLLM 128k
+      max_input_tokens: 64000  # 给 output/tool 留余量
+      health_check_timeout: 10
+
+
+  # ============================================================
+  # llama.cpp / ik_llama.cpp
+  # OpenAI-only backend（给 Claude Code 用）
+  # ============================================================
+
+  - model_name: claude-haiku-4-5
+    litellm_params:
+      model: openai/unsloth/GLM-4.7-Flash
+      api_base: http://100.64.0.45:8080/v1
+      api_key: anything
+      timeout: 180
+      drop_params: true
+      supports_assistant_prefill: false
+      supports_prompt_caching: false
+      supports_response_schema: false
+      supports_thinking: false
+      custom_llm_provider: openai
+
+    model_info:
+      mode: chat
+      max_tokens: 131072
+      max_input_tokens: 640000
+      health_check_timeout: 5

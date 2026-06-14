@@ -1,0 +1,42 @@
+model_list:
+  # ===== IQuest-Coder 40B Instruct (=====
+  - model_name: iquest-40b-instruct
+    litellm_params:
+      model: openai/Firworks/IQuest-Coder-V1-40B-Instruct-nvfp4
+      api_base: http://iquest-40b-nvfp4:8000/v1
+      api_key: anything
+      timeout: 600
+
+  # ===== Claude 别名：映射到 IQuest =====
+  - model_name: claude-3-5-sonnet
+    litellm_params:
+      model: openai/Firworks/IQuest-Coder-V1-40B-Instruct-nvfp4
+      api_base: http://iquest-40b-nvfp4:8000/v1
+      api_key: anything
+      timeout: 600
+      drop_params: true
+
+  - model_name: claude-sonnet-4-20250514
+    litellm_params:
+      model: openai/Firworks/IQuest-Coder-V1-40B-Instruct-nvfp4
+      api_base: http://iquest-40b-nvfp4:8000/v1
+      api_key: anything
+      timeout: 600
+      drop_params: true
+
+# 全局设置
+litellm_settings:
+  drop_params: true
+  set_verbose: false
+
+# 自定义模型的 context window 大小
+model_info:
+  - model_name: iquest-40b-instruct
+    max_tokens: 131072
+    max_input_tokens: 130000
+  - model_name: claude-3-5-sonnet
+    max_tokens: 131072
+    max_input_tokens: 130000
+  - model_name: claude-sonnet-4-20250514
+    max_tokens: 131072
+    max_input_tokens: 130000

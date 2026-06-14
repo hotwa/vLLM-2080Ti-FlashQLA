@@ -1,0 +1,18 @@
+# syntax=docker/dockerfile:1.7
+ARG CUDA_IMAGE=vllm/vllm-openai:nightly-7439e4f41b1f877e088d1b8c9ce4f2847c59423f
+FROM ${CUDA_IMAGE}
+
+SHELL ["/bin/bash", "-lc"]
+ENV DEBIAN_FRONTEND=noninteractive \
+    PIP_DISABLE_PIP_VERSION_CHECK=1 \
+    PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1
+
+ARG TRANSFORMERS_VER=5.0.0
+
+RUN pip install -U "transformers==${TRANSFORMERS_VER}" && \
+    rm -rf /root/.cache/flashinfer && \
+    rm -rf /root/.cache/vllm && \
+    rm -rf /root/.cache/torch_extensions && \
+    rm -rf /tmp/torchinductor_root* /tmp/torchinductor_* 2>/dev/null || true
+

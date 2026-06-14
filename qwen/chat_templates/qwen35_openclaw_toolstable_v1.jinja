@@ -1,0 +1,248 @@
+{# 工具结果只保留头尾，避免多轮 agent 调用把上下文迅速挤爆 #}
+{%- set TOOL_RESPONSE_HEAD_LEN = 2000 -%}
+{%- set TOOL_RESPONSE_TAIL_LEN = 500 -%}
+
+{%- macro as_text(value) -%}
+    {%- if value is string -%}
+        {{- value -}}
+    {%- elif value is number -%}
+        {{- value | string -}}
+    {%- elif value is boolean -%}
+        {{- value | string -}}
+    {%- elif value is none or value is undefined -%}
+        {{- "" -}}
+    {%- elif value is mapping -%}
+        {%- if value.text is defined and value.text is not none -%}
+            {{- value.text | string -}}
+        {%- elif value.content is defined and value.content is not none -%}
+            {{- as_text(value.content) -}}
+        {%- else -%}
+            {{- value | tojson -}}
+        {%- endif -%}
+    {%- elif value is iterable and value is not string -%}
+        {{- value | tojson -}}
+    {%- else -%}
+        {{- value | string -}}
+    {%- endif -%}
+{%- endmacro -%}
+
+{%- macro render_content(content, do_vision_count=false, is_system_content=false) -%}
+    {%- if content is string -%}
+        {{- content -}}
+
+    {%- elif content is none or content is undefined -%}
+        {{- "" -}}
+
+    {%- elif content is mapping -%}
+        {%- if content.text is defined and content.text is not none -%}
+            {{- content.text | string -}}
+        {%- elif content.content is defined and content.content is not none -%}
+            {{- as_text(content.content) -}}
+        {%- else -%}
+            {{- content | tojson -}}
+        {%- endif -%}
+
+    {%- elif content is iterable and content is not mapping -%}
+        {%- for item in content -%}
+            {%- if item is string -%}
+                {{- item -}}
+
+            {%- elif item is mapping -%}
+                {%- set item_type = item.type if item.type is defined else none -%}
+
+                {%- if ("image" in item) or ("image_url" in item) or item_type == "image" or item_type == "input_image" -%}
+                    {%- if not is_system_content -%}
+                        {{- "<|vision_start|><|image_pad|><|vision_end|>" -}}
+                    {%- endif -%}
+
+                {%- elif ("video" in item) or item_type == "video" or item_type == "input_video" -%}
+                    {%- if not is_system_content -%}
+                        {{- "<|vision_start|><|video_pad|><|vision_end|>" -}}
+                    {%- endif -%}
+
+                {%- elif item.input_text is defined and item.input_text is not none -%}
+                    {{- item.input_text | string -}}
+                {%- elif item.text is defined and item.text is not none -%}
+                    {{- item.text | string -}}
+                {%- elif item.content is defined and item.content is not none -%}
+                    {{- as_text(item.content) -}}
+                {%- else -%}
+                    {{- "" -}}
+                {%- endif -%}
+
+            {%- else -%}
+                {{- as_text(item) -}}
+            {%- endif -%}
+        {%- endfor -%}
+
+    {%- else -%}
+        {{- as_text(content) -}}
+    {%- endif -%}
+{%- endmacro -%}
+
+{%- macro render_tool_call_xml(tc) -%}
+    {%- if tc.function is defined -%}
+        {%- set fn = tc.function -%}
+    {%- else -%}
+        {%- set fn = tc -%}
+    {%- endif -%}
+<tool_call>
+<function={{ fn.name if fn.name is defined else "unknown_tool" }}>
+{%- if fn.arguments is mapping -%}
+    {%- for k, v in fn.arguments.items() -%}
+<parameter={{ k }}>
+{%- if v is mapping or (v is sequence and v is not string) -%}
+{{ v | tojson }}
+{%- else -%}
+{{ v | string }}
+{%- endif -%}
+</parameter>
+    {%- endfor -%}
+{%- elif fn.arguments is string -%}
+<parameter=arguments>
+{{ fn.arguments }}
+</parameter>
+{%- elif fn.arguments is defined and fn.arguments is not none -%}
+<parameter=arguments>
+{{ fn.arguments | tojson }}
+</parameter>
+{%- endif -%}
+</function>
+</tool_call>
+{%- endmacro -%}
+
+{%- macro render_truncated_tool_result(text) -%}
+    {%- if text | length <= (TOOL_RESPONSE_HEAD_LEN + TOOL_RESPONSE_TAIL_LEN) -%}
+{{ text }}
+    {%- else -%}
+{{ text[:TOOL_RESPONSE_HEAD_LEN] }}
+...[TRUNCATED {{ (text | length) - TOOL_RESPONSE_HEAD_LEN - TOOL_RESPONSE_TAIL_LEN }} CHARS]...
+{{ text[-TOOL_RESPONSE_TAIL_LEN:] }}
+    {%- endif -%}
+{%- endmacro -%}
+
+{%- if not messages or messages | length == 0 -%}
+{{- raise_exception("No messages provided.") -}}
+{%- endif -%}
+
+{# hoist system + developer #}
+{%- set ns = namespace(system_parts=[]) -%}
+{%- for message in messages -%}
+    {%- if message.role == "system" or message.role == "developer" -%}
+        {%- set part = render_content(message.content, false, true) | trim -%}
+        {%- if part -%}
+            {%- set ns.system_parts = ns.system_parts + [part] -%}
+        {%- endif -%}
+    {%- endif -%}
+{%- endfor -%}
+
+{%- set protocol_block -%}
+You are a coding assistant for OpenCode/OpenClaw workflows.
+
+Tool-calling rules:
+1. If a tool is needed, output only XML tool-call blocks.
+2. Always wrap calls in `<tool_call>...</tool_call>`.
+3. Do not mix tool calls with normal text in the same turn.
+4. For bash, always include both `command` and `description`.
+5. Never output thinking or internal tags.
+
+Tool-call format:
+
+<tool_call>
+<function=TOOL_NAME>
+<parameter=ARG_NAME>
+ARG_VALUE
+</parameter>
+</function>
+</tool_call>
+
+{%- if tools and tools is iterable and tools is not mapping %}
+
+Available tools:
+<tools>
+{%- for tool in tools %}
+{{ tool | tojson }}
+{%- endfor %}
+</tools>
+{%- endif %}
+{%- endset -%}
+
+{%- set merged_system = (ns.system_parts | join("\n\n")) | trim -%}
+{%- if merged_system -%}
+    {%- set merged_system = protocol_block | trim + "\n\n" + merged_system -%}
+{%- else -%}
+    {%- set merged_system = protocol_block | trim -%}
+{%- endif -%}
+
+<|im_start|>system
+{{ merged_system }}
+<|im_end|>
+
+{%- set body = namespace(count=0) -%}
+{%- for message in messages -%}
+    {%- set role = message.role if message.role is defined else "user" -%}
+
+    {%- if role == "system" or role == "developer" -%}
+        {# already hoisted #}
+
+    {%- elif role == "user" -%}
+        {%- set content = render_content(message.content, true, false) | trim -%}
+        {%- if content -%}
+<|im_start|>user
+{{ content }}
+<|im_end|>
+            {%- set body.count = body.count + 1 -%}
+        {%- endif -%}
+
+    {%- elif role == "assistant" -%}
+        {%- set has_tool_calls = message.tool_calls is defined and message.tool_calls and message.tool_calls is iterable and message.tool_calls is not mapping -%}
+        {%- set content = render_content(message.content, true, false) | trim -%}
+
+        {%- if has_tool_calls -%}
+<|im_start|>assistant
+{%- for tc in message.tool_calls -%}
+{{ render_tool_call_xml(tc) }}
+    {%- if not loop.last %}
+
+
+    {%- endif -%}
+{%- endfor -%}
+<|im_end|>
+            {%- set body.count = body.count + 1 -%}
+
+        {%- elif content -%}
+<|im_start|>assistant
+{{ content }}
+<|im_end|>
+            {%- set body.count = body.count + 1 -%}
+        {%- endif -%}
+
+{%- elif role == "tool" -%}
+        {%- set content = render_content(message.content, true, false) | trim -%}
+        {%- if content -%}
+<|im_start|>tool
+{%- if message.name is defined and message.name %}{{ message.name }}:
+{%- endif %}
+{{ render_truncated_tool_result(content) }}
+<|im_end|>
+            {%- set body.count = body.count + 1 -%}
+        {%- endif -%}
+
+    {%- else -%}
+        {%- set content = render_content(message.content, true, false) | trim -%}
+        {%- if content -%}
+<|im_start|>user
+{{ content }}
+<|im_end|>
+            {%- set body.count = body.count + 1 -%}
+        {%- endif -%}
+    {%- endif -%}
+{%- endfor -%}
+
+{%- if body.count == 0 -%}
+{{- raise_exception("Rendered prompt body is empty.") -}}
+{%- endif -%}
+
+{%- if add_generation_prompt -%}
+<|im_start|>assistant
+{%- endif -%}

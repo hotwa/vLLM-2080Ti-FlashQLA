@@ -1,0 +1,91 @@
+services:
+  qwenserver:
+    build:
+      context: .
+      dockerfile: Dockerfile.night
+    image: hotwa/vllm:nightly
+    container_name: qwenserver
+    ports:
+      - "8001:8000"
+    gpus: all
+    volumes:
+      - ~/.cache/huggingface:/root/.cache/huggingface
+    env_file:
+      - ./.env
+
+    command:
+      # - "Jackrong/Qwen3.5-27B-Claude-4.6-Opus-Reasoning-Distilled"   
+      - "mconcat/Qwen3.5-27B-Claude-4.6-Opus-Reasoning-Distilled-FP8-Dynamic"
+      - "--trust-remote-code"
+      - "--served-model-name"
+      - "Qwen3.5-27B"
+      - "--quantization"
+      - "fp8"
+      - "--enable-auto-tool-choice"
+      - "--tool-call-parser"
+      - "qwen3_coder"
+      - "--reasoning-parser"
+      - "qwen3"
+      
+      - "--max-num-seqs"
+      - "1"
+
+      - "--gpu-memory-utilization"
+      - "0.92"
+
+      - "--kv-cache-dtype"
+      - "fp8"
+
+      - "--speculative-config"
+      - '{"method":"qwen3_next_mtp","num_speculative_tokens":2}'
+
+      - "--max-num-batched-tokens"
+      - "16384"
+
+      - "--host"
+      - "0.0.0.0"
+      - "--port"
+      - "8000"
+      # - "--language-model-only"
+
+    environment:
+      - VLLM_ALLOW_LONG_MAX_MODEL_LEN=1
+      - HF_HUB_ENABLE_HF_TRANSFER=0
+      # - HF_ENDPOINT=https://hf-mirror.com
+
+    shm_size: "16gb"
+    ulimits:
+      memlock: -1
+      stack: 67108864
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://127.0.0.1:8000/ping >/dev/null"]
+      interval: 5s
+      timeout: 3s
+      retries: 240
+      start_period: 600s
+
+  litellm-router:
+    image: docker.litellm.ai/berriai/litellm:main-stable
+    container_name: litellm-router
+    ports:
+      - "4000:4000"
+    volumes:
+      - ./litellm-config.yaml:/app/config.yaml:ro
+    env_file:
+      - ./.env.litellm
+    environment:
+      # 通过 Docker DNS 访问 vLLM
+      - VLLM_API_BASE=http://qwenserver:8000/v1
+      - LITELLM_DISABLE_STREAMING_LOGGING=true
+    command:
+      - "--config"
+      - "/app/config.yaml"
+      - "--host"
+      - "0.0.0.0"
+      - "--port"
+      - "4000"
+    depends_on:
+      qwenserver:
+        condition: service_healthy
+    restart: unless-stopped

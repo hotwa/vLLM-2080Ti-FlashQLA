@@ -1,0 +1,109 @@
+version: "3.9"
+
+services:
+  # 1) tailscale sidecar：拿到稳定的 TS IP
+  tailscale-gw:
+    image: tailscale/tailscale:latest
+    container_name: tailscale-gw
+    hostname: llm-gw
+    environment:
+      - TS_AUTHKEY=${TS_AUTHKEY}
+      - TS_STATE_DIR=/var/lib/tailscale
+      - TS_USERSPACE=false
+      - TS_EXTRA_ARGS=--login-server=${HEADSCALE_URL} --accept-dns=false
+      # 可选：打 tag（前提是 headscale ACL 允许）
+      # - TS_EXTRA_ARGS=--login-server=${HEADSCALE_URL} --advertise-tags=tag:llm --accept-dns=false
+    volumes:
+      - ./tailscale/state:/var/lib/tailscale
+    devices:
+      - /dev/net/tun:/dev/net/tun
+    cap_add:
+      - NET_ADMIN
+    # 重要：端口映射写在 tailscale 容器上（因为其它服务共享网络栈）
+    ports:
+      - "4000:4000"   # litellm-router
+      - "18082:3000"  # anthropic-proxy (容器内 3000)
+    restart: unless-stopped
+    networks:
+      - llmnet
+
+  # 2) vLLM：IQuest 40B Thinking（64K + FP8 KV cache + 不并发）
+  iquest-40b-thinking:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: hotwa/vllm-iquest-40b-thinking:v0.13.0-6fb9c
+    container_name: vllm-iquest-40b-thinking
+    runtime: nvidia
+    environment:
+      - NVIDIA_VISIBLE_DEVICES=all
+      - HUGGING_FACE_HUB_TOKEN=${HF_TOKEN:-}
+      - HF_HOME=/root/.cache/huggingface
+      - TRANSFORMERS_OFFLINE=1
+    volumes:
+      - ~/.cache:/root/.cache
+    command: >
+      vllm serve
+      --model /root/.cache/huggingface/modelscope/models--IQuestLab--IQuest-Coder-V1-40B-Loop-Instruct
+      --trust-remote-code
+      --dtype bfloat16
+      --quantization fp8
+      --kv-cache-dtype fp8
+      --attention-config.backend TRITON_ATTN
+      --max-model-len 131072
+      --gpu-memory-utilization 0.92
+      --max-num-seqs 1
+      --enable-auto-tool-choice
+      --tool-call-parser qwen3_coder
+      --reasoning-parser qwen3
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+    shm_size: "16gb"
+    ulimits:
+      memlock: -1
+      stack: 67108864
+    restart: unless-stopped
+    networks:
+      - llmnet
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://127.0.0.1:8000/health >/dev/null"]
+      interval: 5s
+      timeout: 3s
+      retries: 240
+      start_period: 600s
+
+  # 3) LiteLLM：共享 tailscale-gw 网络栈（所以它的 4000 会出现在 TS IP 上）
+  litellm-router:
+    image: docker.litellm.ai/berriai/litellm:main-stable
+    container_name: litellm-router
+    network_mode: "service:tailscale-gw"
+    volumes:
+      - ./litellm-config.yaml:/app/config.yaml:ro
+    command: ["--config", "/app/config.yaml", "--host", "0.0.0.0", "--port", "4000"]
+    restart: unless-stopped
+    depends_on:
+      iquest-40b-thinking:
+        condition: service_healthy
+
+  # 4) anthropic-proxy：共享 tailscale-gw 网络栈（3000 出现在 TS IP 上）
+  anthropic-proxy:
+    image: hotwa/anthropic-proxy:latest
+    build:
+      context: ./anthropic-proxy-rs
+      dockerfile: Dockerfile
+    container_name: anthropic-proxy
+    network_mode: "service:tailscale-gw"
+    env_file:
+      - ./anthropic-proxy-rs/.env
+    restart: unless-stopped
+    depends_on:
+      - litellm-router
+
+networks:
+  llmnet:
+    driver: bridge

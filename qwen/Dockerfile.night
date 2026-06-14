@@ -1,0 +1,27 @@
+# syntax=docker/dockerfile:1.7
+ARG CUDA_IMAGE=vllm/vllm-openai:nightly
+FROM ${CUDA_IMAGE}
+
+SHELL ["/bin/bash", "-lc"]
+ENV DEBIAN_FRONTEND=noninteractive \
+    PIP_DISABLE_PIP_VERSION_CHECK=1 \
+    PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1
+
+RUN pip install -U "transformers==5.2.0" tokenizers accelerate \
+    && python3 -c "import transformers; print('transformers:', transformers.__version__)" \
+    && rm -rf /root/.cache/flashinfer /root/.cache/vllm \
+    && true
+
+RUN python3 - <<'PY'
+from pathlib import Path
+p = Path("/usr/local/lib/python3.12/dist-packages/transformers/modeling_rope_utils.py")
+s = p.read_text()
+old = 'ignore_keys_at_rope_validation = ignore_keys_at_rope_validation | {"partial_rotary_factor"}'
+new = 'ignore_keys_at_rope_validation = set(ignore_keys_at_rope_validation) | {"partial_rotary_factor"}'
+if old in s:
+    p.write_text(s.replace(old, new, 1))
+    print("Patched", p)
+else:
+    raise SystemExit("Pattern not found; transformers changed, update patch.")
+PY

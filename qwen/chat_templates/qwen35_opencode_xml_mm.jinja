@@ -1,0 +1,216 @@
+{%- set image_count = namespace(value=0) -%}
+{%- set video_count = namespace(value=0) -%}
+
+{%- macro render_content(content, do_vision_count=false, is_system_content=false) -%}
+    {%- if content is string -%}
+        {{- content -}}
+    {%- elif content is iterable and content is not mapping -%}
+        {%- for item in content -%}
+            {%- if item is mapping and ('image' in item or 'image_url' in item or (item.type is defined and item.type == 'image')) -%}
+                {%- if is_system_content -%}
+                    {{- raise_exception('System/developer message cannot contain images.') -}}
+                {%- endif -%}
+                {%- if do_vision_count -%}
+                    {%- set image_count.value = image_count.value + 1 -%}
+                {%- endif -%}
+                {{- '<|vision_start|><|image_pad|><|vision_end|>' -}}
+            {%- elif item is mapping and ('video' in item or (item.type is defined and item.type == 'video')) -%}
+                {%- if is_system_content -%}
+                    {{- raise_exception('System/developer message cannot contain videos.') -}}
+                {%- endif -%}
+                {%- if do_vision_count -%}
+                    {%- set video_count.value = video_count.value + 1 -%}
+                {%- endif -%}
+                {{- '<|vision_start|><|video_pad|><|vision_end|>' -}}
+            {%- elif item is mapping and 'text' in item -%}
+                {{- item.text -}}
+            {%- else -%}
+                {{- raise_exception('Unexpected item type in content.') -}}
+            {%- endif -%}
+        {%- endfor -%}
+    {%- elif content is none or content is undefined -%}
+        {{- '' -}}
+    {%- else -%}
+        {{- raise_exception('Unexpected content type.') -}}
+    {%- endif -%}
+{%- endmacro -%}
+
+{%- macro strip_reasoning_tags(text) -%}
+    {%- if text is string -%}
+        {%- set t = text
+            | replace('<think>', '')
+            | replace('</think>', '')
+            | replace('<thinking>', '')
+            | replace('</thinking>', '')
+            | trim -%}
+        {{- t -}}
+    {%- else -%}
+        {{- '' -}}
+    {%- endif -%}
+{%- endmacro -%}
+
+{%- macro render_tool_call_xml(tc) -%}
+    {%- if tc.function is defined -%}
+        {%- set fn = tc.function -%}
+    {%- else -%}
+        {%- set fn = tc -%}
+    {%- endif -%}
+<tool_call>
+<function={{ fn.name }}>
+{%- if fn.arguments is mapping -%}
+    {%- for k, v in fn.arguments.items() -%}
+<parameter={{ k }}>
+{%- if v is mapping or (v is sequence and v is not string) -%}
+{{ v | tojson }}
+{%- else -%}
+{{ v | string }}
+{%- endif -%}
+</parameter>
+    {%- endfor -%}
+{%- elif fn.arguments is string -%}
+<parameter=arguments>
+{{ fn.arguments }}
+</parameter>
+{%- endif -%}
+</function>
+</tool_call>
+{%- endmacro -%}
+
+{%- if not messages or messages | length == 0 -%}
+{{- raise_exception('No messages provided.') -}}
+{%- endif -%}
+
+{# hoist system/developer messages to the front #}
+{%- set ns = namespace(system_parts=[]) -%}
+{%- for message in messages -%}
+    {%- if message.role == 'system' or message.role == 'developer' -%}
+        {%- set part = render_content(message.content, false, true) | trim -%}
+        {%- if part -%}
+            {%- set ns.system_parts = ns.system_parts + [part] -%}
+        {%- endif -%}
+    {%- endif -%}
+{%- endfor -%}
+
+{%- set protocol_block -%}
+You are a coding and multimodal assistant for OpenCode-style agent workflows.
+
+CRITICAL OUTPUT RULES:
+
+1. Never reveal hidden reasoning, chain-of-thought, or internal analysis.
+2. Never output <tool_code>.
+3. If tools are available, use ONLY the tools listed in <tools>.
+4. When calling a tool, the FIRST character of your reply must be "<".
+5. If you call a tool, output ONLY XML in exactly this form:
+
+<tool_call>
+<function=TOOL_NAME>
+<parameter=ARG_NAME>
+ARG_VALUE
+</parameter>
+</function>
+</tool_call>
+
+6. Do not output any text, explanation, prefix, suffix, markdown fence, or commentary before the first <tool_call>.
+7. Do not output any text after the final </tool_call>.
+8. Do not output JSON tool calls.
+9. If multiple tool calls are needed, output multiple <tool_call> blocks consecutively.
+10. If no tool is needed, answer normally in plain text.
+11. For the bash tool, always provide BOTH:
+    - <parameter=command>
+    - <parameter=description>
+12. The description must briefly explain the purpose of the command.
+13. For image or video understanding requests, answer directly from the visual input when no tool is needed.
+14. After receiving tool results, continue the task and provide the final answer unless another tool is required.
+15. Do not stop after a reasoning block. Always either call a tool or provide a final answer.
+16. Do not emit standalone <think> or <thinking> blocks as the final response.
+
+{%- if tools and tools is iterable and tools is not mapping %}
+
+# Tools
+
+You have access to the following functions:
+
+<tools>
+{%- for tool in tools %}
+{{ tool | tojson }}
+{%- endfor %}
+</tools>
+{%- endif %}
+{%- endset -%}
+
+{%- set merged_system = (ns.system_parts | join('\n\n')) | trim -%}
+{%- if merged_system -%}
+    {%- set merged_system = protocol_block | trim + '\n\n' + merged_system -%}
+{%- else -%}
+    {%- set merged_system = protocol_block | trim -%}
+{%- endif -%}
+
+<|im_start|>system
+{{ merged_system }}
+<|im_end|>
+
+{%- set body = namespace(count=0) -%}
+{%- for message in messages -%}
+    {%- if message.role == 'system' or message.role == 'developer' -%}
+        {# already hoisted #}
+
+    {%- elif message.role == 'user' -%}
+        {%- set content = render_content(message.content, true, false) | trim -%}
+        {%- if content -%}
+<|im_start|>user
+{{ content }}
+<|im_end|>
+            {%- set body.count = body.count + 1 -%}
+        {%- endif -%}
+
+    {%- elif message.role == 'assistant' -%}
+        {%- set content = render_content(message.content, true, false) -%}
+        {%- set content = strip_reasoning_tags(content) | trim -%}
+        {%- set has_tool_calls = message.tool_calls is defined and message.tool_calls and message.tool_calls is iterable and message.tool_calls is not mapping -%}
+        {%- if content or has_tool_calls -%}
+<|im_start|>assistant
+{%- if content -%}
+{{ content }}
+{%- endif -%}
+{%- if has_tool_calls -%}
+    {%- if content %}
+
+    {%- endif -%}
+    {%- for tc in message.tool_calls -%}
+{{ render_tool_call_xml(tc) }}
+        {%- if not loop.last %}
+
+        {%- endif -%}
+    {%- endfor -%}
+{%- endif -%}
+<|im_end|>
+            {%- set body.count = body.count + 1 -%}
+        {%- endif -%}
+
+    {%- elif message.role == 'tool' -%}
+        {%- set content = render_content(message.content, true, false) | trim -%}
+        {%- if content -%}
+            {%- if loop.first or messages[loop.index0 - 1].role != 'tool' -%}
+<|im_start|>user
+            {%- endif -%}
+<tool_response>
+{{ content }}
+</tool_response>
+            {%- if loop.last or messages[loop.index0 + 1].role != 'tool' -%}
+<|im_end|>
+            {%- endif -%}
+            {%- set body.count = body.count + 1 -%}
+        {%- endif -%}
+
+    {%- else -%}
+        {{- raise_exception('Unexpected message role: ' + message.role) -}}
+    {%- endif -%}
+{%- endfor -%}
+
+{%- if body.count == 0 -%}
+{{- raise_exception('Rendered prompt body is empty.') -}}
+{%- endif -%}
+
+{%- if add_generation_prompt -%}
+<|im_start|>assistant
+{%- endif -%}

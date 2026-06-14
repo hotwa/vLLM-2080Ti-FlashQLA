@@ -1,0 +1,77 @@
+services:
+  llama-server:
+    container_name: llama-server
+    build:
+      context: .
+      dockerfile: llama-server-cuda.Dockerfile
+      # 如果你 Dockerfile 里有 ARG CUDA_DOCKER_ARCH，可以在这里传
+      # args:
+      #   CUDA_DOCKER_ARCH: "120"
+    image: hotwa/ik:latest
+
+    # 端口映射
+    ports:
+      - "8080:8080"
+
+    # 强烈建议给一点共享内存（有些情况下能减少 mmap/缓存相关问题）
+    shm_size: "2g"
+
+    # WSL2：你之前能跑 vLLM 的 driver 映射方式，这里照搬
+    volumes:
+      # 模型目录（把 /data/models 改成你的）
+      - ${MODEL_DIR:-~/models/gguf/GLM-4.7-Flash}:/models:ro
+
+      # WSL2 NVIDIA driver libs（保持只读）
+      #- /usr/lib/wsl/lib/libcuda.so.1:/usr/lib/x86_64-linux-gnu/libcuda.so.1:ro
+      #- /usr/lib/wsl/lib/libcuda.so:/usr/lib/x86_64-linux-gnu/libcuda.so:ro
+
+      # 可选：如果你还遇到 NVML/管理库相关问题再打开
+      # - /usr/lib/wsl/lib/libnvidia-ml.so.1:/usr/lib/x86_64-linux-gnu/libnvidia-ml.so.1:ro
+
+    # Compose v2 支持：直接声明 GPU（比 deploy 更通用）
+    # 如果你这行报错（极少数旧 compose），删掉它，靠上面的 libcuda 映射也能跑，但更推荐修 compose/工具链
+    gpus: all
+
+    # 运行环境（对 nvidia 容器运行时更友好；即便你用手动映射，也无害）
+    environment:
+      - NVIDIA_VISIBLE_DEVICES=all
+      - NVIDIA_DRIVER_CAPABILITIES=compute,utility
+
+    restart: unless-stopped
+
+    # 直接把你的启动参数搬进来（容器 ENTRYPOINT 已是 /llama-server）
+    command:
+      - --model
+      - /models/GLM-4.7-Flash-IQ5_K.gguf
+      - --alias
+      - ubergarm/GLM-4.7-Flash
+      - -c
+      - "131072"
+      - -ctk
+      - q8_0
+      - -ger
+      - --merge-qkv
+      - -mla
+      - "3"
+      - -amb
+      - "512"
+      - -ngl
+      - "99"
+      - -ub
+      - "4096"
+      - -b
+      - "4096"
+      - --threads
+      - "1"
+      - --host
+      - 0.0.0.0
+      - --port
+      - "8080"
+      - --jinja
+      - --no-mmap
+
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 5

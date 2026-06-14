@@ -1,0 +1,96 @@
+# vLLM 2080 Ti Definitive local artifacts
+
+# Python and editable-install outputs
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+env/
+venv/
+build/
+dist/
+wheels/
+.deps/
+uv.lock
+
+# Build, runtime, and benchmark outputs
+build-logs/
+run-logs/
+logs/
+*.log
+*.csv
+*.jsonl
+*.pkl
+
+# Local model/checkpoint data must stay out of git
+Model/
+models/
+checkpoints/
+weights/
+*.safetensors
+*.gguf
+*.bin
+*.pt
+*.pth
+
+# Generated native artifacts
+*.so
+*.o
+*.a
+*.hip
+*_hip*
+hip_compat.h
+CMakeUserPresets.json
+cmake-build-*/
+.triton/
+
+# Source-generated files
+/vllm/_version.py
+vllm/vllm_flash_attn/*
+!vllm/vllm_flash_attn/__init__.py
+!vllm/vllm_flash_attn/flash_attn_interface.py
+vllm/third_party/triton_kernels/*
+vllm/third_party/flashmla/flash_mla_interface.py
+vllm/third_party/deep_gemm/
+vllm/grpc/vllm_engine_pb2.py
+vllm/grpc/vllm_engine_pb2_grpc.py
+vllm/grpc/vllm_engine_pb2.pyi
+csrc/cpu/cpu_attn_dispatch_generated.h
+csrc/moe/marlin_moe_wna16/kernel_*
+
+# Local tool/editor files
+.DS_Store
+.omx/
+backups/
+.cache/
+.pytest_cache/
+.mypy_cache/
+.pyre/
+.pytype/
+.idea/
+.vscode/
+.claude/
+.codex/
+.cursor/
+*.swp
+*.swo
+
+# Project specific
+glm46v/tailscale
+IQuest-Coder/instruct/tailscale
+glm/glm46v/tailscale
+/srv/project/vllm/ikllama/gguf
+/CoPaw-ik/hf-cache/
+/CoPaw-ik/logs/
+/CoPaw-ik/llama.log
+/qwen36-a3b-ikllama-dual2080ti/.venv/
+/qwen36-a3b-ikllama-dual2080ti/artifacts/
+/qwen36-a3b-ikllama-dual2080ti/logs/
+/qwen36-a3b-ikllama-dual2080ti/llama.log
+/docs/
+/qwen36-dflash/
+/qwen/.hf-cache/
+qwen/fixed_tokenizer/
+
+# Ignore all .env files (contain secrets)
+**/.env

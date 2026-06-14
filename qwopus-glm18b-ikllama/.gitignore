@@ -1,0 +1,11 @@
+.env
+.venv/
+logs/*
+!logs/.gitkeep
+models/*
+!models/.gitkeep
+repos/*
+!repos/.gitkeep
+run/*
+!run/.gitkeep
+

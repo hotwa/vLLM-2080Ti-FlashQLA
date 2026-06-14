@@ -1,0 +1,8 @@
+/models/merged/*
+!/models/merged/.gitkeep
+/models/gguf/*
+!/models/gguf/.gitkeep
+/hf-cache/*
+!/hf-cache/.gitkeep
+/.env
+/*.log

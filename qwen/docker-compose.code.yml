@@ -1,0 +1,84 @@
+services:
+  vllm:
+    # 继续使用包含 transformers==5.3.0 的自定义镜像
+    build:
+      context: ./build/qwen35-custom
+      dockerfile: Dockerfile
+    image: my-vllm-qwen35-custom:v1
+    container_name: qwopus35-27b-v3-fp8
+    restart: unless-stopped
+    ipc: host
+    shm_size: "32gb"
+
+    ports:
+      - "8000:8000"
+
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+
+    volumes:
+      - ~/.cache/huggingface:/root/.cache/huggingface
+      - ./chat_templates:/app/chat_templates:ro
+      - ./tool_parsers:/app/tool_parsers:ro
+      # 移除了 fixed_tokenizer 的挂载
+
+    environment:
+      - HF_TOKEN=${HF_TOKEN}
+      - NVIDIA_VISIBLE_DEVICES=all
+      - NVIDIA_DRIVER_CAPABILITIES=compute,utility
+      - VLLM_LOGGING_LEVEL=INFO
+
+    command:
+      # Use the fixed-metadata fork so vLLM can load the FP8 checkpoint
+      # without the upstream tensor-name and metadata quirks.
+      - KyleHessling1/Qwopus3.5-27B-v3-FP8-vllm-ready
+      - --served-model-name
+      - Qwen3.5-27B
+      - --host
+      - 0.0.0.0
+      - --port
+      - "8000"
+      - --trust-remote-code
+      - --max-model-len
+      - "262144"
+
+      # 保持代理稳定与显存余量
+      - --max-num-seqs
+      - "4"
+      - --gpu-memory-utilization
+      - "0.92"
+      - --kv-cache-dtype 
+      - fp8_e4m3
+
+      # 开启 OpenClaw XML 工具解析工作流
+      - --enable-auto-tool-choice
+      - --tool-parser-plugin
+      - /app/tool_parsers/openclaw_xml_tool_parser.py
+      - --tool-call-parser
+      - openclaw_xml
+      # - --speculative-config
+      # - '{"method":"qwen3_next_mtp","num_speculative_tokens":1}'
+      
+      # 纯文本模型，跳过多模态测算
+      - --skip-mm-profiling
+
+      - --default-chat-template-kwargs
+      - '{"enable_thinking": false}'
+
+      # 挂载刚才下载的 V3 专属 Jinja 模板
+      - --chat-template
+      - /app/chat_templates/qwopus_v3_template.jinja
+      - --chat-template-content-format
+      - openai
+
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://127.0.0.1:8000/health >/dev/null || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 60
+      start_period: 300s

@@ -1,0 +1,160 @@
+services:
+  server:
+    build:
+      context: .
+      dockerfile: build/Dockerfile
+      target: server
+      args:
+        CUDA_VERSION: ${CUDA_VERSION:-12.8.1}
+        CMAKE_CUDA_ARCHITECTURES: ${CMAKE_CUDA_ARCHITECTURES:-75}
+        IK_LLAMA_REF: ${IK_LLAMA_REF:-main}
+    image: qwen36-a3b-ikllama-server:${IK_LLAMA_REF:-main}
+    container_name: qwen36-a3b-ikllama-server
+    restart: unless-stopped
+    ipc: host
+    shm_size: "16g"
+    gpus: all
+    env_file:
+      - path: ./.env
+        required: false
+    environment:
+      MODEL_FILE: ${MODEL_FILE:-/workspace/models/gguf/Qwen3.6-35B-A3B-Opus-Q5_K_M.gguf}
+      MODEL_NAME: ${MODEL_NAME:-Qwen3.6-35B-A3B-Opus-Q5_K_M}
+      CHAT_TEMPLATE_FILE: ${CHAT_TEMPLATE_FILE:-/workspace/jinja/qwopus_v3_template.jinja}
+      MAX_MODEL_LEN: ${MAX_MODEL_LEN:-131072}
+      N_PARALLEL: ${N_PARALLEL:-1}
+      N_GPU_LAYERS: ${N_GPU_LAYERS:-999}
+      SPLIT_MODE: ${SPLIT_MODE:-graph}
+      TENSOR_SPLIT: ${TENSOR_SPLIT:-50,50}
+      UBATCH: ${UBATCH:-512}
+      BATCH: ${BATCH:-2048}
+      THREADS: ${THREADS:-4}
+      CACHE_TYPE_K: ${CACHE_TYPE_K:-q8_0}
+      CACHE_TYPE_V: ${CACHE_TYPE_V:-q8_0}
+      FLASH_ATTN: ${FLASH_ATTN:-1}
+      JINJA: ${JINJA:-0}
+      NO_CONTEXT_SHIFT: ${NO_CONTEXT_SHIFT:-1}
+      NO_MMAP: ${NO_MMAP:-1}
+      REASONING_FORMAT: ${REASONING_FORMAT:-none}
+      CUDA_VISIBLE_DEVICES: ${CUDA_VISIBLE_DEVICES:-0,1}
+      NVIDIA_VISIBLE_DEVICES: ${CUDA_VISIBLE_DEVICES:-0,1}
+      NVIDIA_DRIVER_CAPABILITIES: compute,utility
+    volumes:
+      - ./models:/workspace/models
+      - ./configs:/workspace/configs:ro
+      - ./jinja:/workspace/jinja:ro
+      - ./logs:/workspace/logs
+      - ./results:/workspace/results
+    ports:
+      - "${HOST_PORT:-8000}:8000"
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 2
+              capabilities: [gpu]
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://127.0.0.1:8000/v1/models >/dev/null"]
+      interval: 15s
+      timeout: 5s
+      retries: 20
+      start_period: 600s
+    command:
+      - bash
+      - -lc
+      - |
+        set -euo pipefail
+
+        model_file="${MODEL_FILE:-/workspace/models/gguf/Qwen3.6-35B-A3B-Opus-Q5_K_M.gguf}"
+        if [[ "$$model_file" != /* ]]; then
+          model_dir="${MODEL_DIR:-./models/gguf}"
+          model_file="/workspace/$${model_dir#./}/$$model_file"
+        fi
+        model_name="${MODEL_NAME:-Qwen3.6-35B-A3B-Opus-Q5_K_M}"
+        chat_template_file="${CHAT_TEMPLATE_FILE:-/workspace/jinja/qwopus_v3_template.jinja}"
+        if [[ "$$chat_template_file" != /* ]]; then
+          chat_template_file="/workspace/$${chat_template_file#./}"
+        fi
+        ctx_size="${MAX_MODEL_LEN:-131072}"
+        n_parallel="${N_PARALLEL:-1}"
+        n_gpu_layers="${N_GPU_LAYERS:-999}"
+        split_mode="${SPLIT_MODE:-graph}"
+        tensor_split="${TENSOR_SPLIT:-50,50}"
+        ubatch="${UBATCH:-512}"
+        batch="${BATCH:-2048}"
+        threads="${THREADS:-4}"
+        cache_type_k="${CACHE_TYPE_K:-q8_0}"
+        cache_type_v="${CACHE_TYPE_V:-q8_0}"
+        flash_attn="${FLASH_ATTN:-1}"
+        jinja="${JINJA:-0}"
+        no_context_shift="${NO_CONTEXT_SHIFT:-1}"
+        no_mmap="${NO_MMAP:-1}"
+        reasoning_format="${REASONING_FORMAT:-none}"
+        reasoning_budget="${REASONING_BUDGET:-0}"
+        chat_template_enable_thinking="${CHAT_TEMPLATE_ENABLE_THINKING:-0}"
+        sampling_temp="${SAMPLING_TEMP:-0.7}"
+        sampling_top_p="${SAMPLING_TOP_P:-0.8}"
+        sampling_top_k="${SAMPLING_TOP_K:-20}"
+        sampling_min_p="${SAMPLING_MIN_P:-0.0}"
+        sampling_presence_penalty="${SAMPLING_PRESENCE_PENALTY:-1.5}"
+        if [ "$$chat_template_enable_thinking" = "1" ] || [ "$$chat_template_enable_thinking" = "true" ]; then
+          chat_template_kwargs='{"enable_thinking": true}'
+        else
+          chat_template_kwargs='{"enable_thinking": false}'
+        fi
+
+        if [ ! -f "$$model_file" ]; then
+          echo "Missing model file: $$model_file" >&2
+          echo "Run ./scripts/download_model.sh first." >&2
+          exit 1
+        fi
+
+        if [ "$$jinja" = "1" ] && [ ! -f "$$chat_template_file" ]; then
+          echo "Missing chat template: $$chat_template_file" >&2
+          exit 1
+        fi
+
+        cmd=(
+          llama-server
+          -m "$$model_file"
+          -a "$$model_name"
+          --host 0.0.0.0
+          --port 8000
+          -c "$$ctx_size"
+          -np "$$n_parallel"
+          -ngl "$$n_gpu_layers"
+          -sm "$$split_mode"
+          -ts "$$tensor_split"
+          -ub "$$ubatch"
+          -b "$$batch"
+          --threads "$$threads"
+          --cache-type-k "$$cache_type_k"
+          --cache-type-v "$$cache_type_v"
+          --reasoning-format "$$reasoning_format"
+          --reasoning-budget "$$reasoning_budget"
+          --temp "$$sampling_temp"
+          --top-p "$$sampling_top_p"
+          --top-k "$$sampling_top_k"
+          --min-p "$$sampling_min_p"
+          --presence-penalty "$$sampling_presence_penalty"
+        )
+
+        if [ "$$flash_attn" = "1" ]; then
+          cmd+=(--flash-attn on)
+        fi
+        if [ "$$jinja" = "1" ]; then
+          cmd+=(--jinja --chat-template-file "$$chat_template_file")
+          cmd+=(--chat-template-kwargs "$$chat_template_kwargs")
+        else
+          cmd+=(--jinja)
+          echo "Using chat template from GGUF metadata (JINJA=0)."
+        fi
+        if [ "$$no_context_shift" = "1" ]; then
+          cmd+=(--no-context-shift)
+        fi
+        if [ "$$no_mmap" = "1" ]; then
+          cmd+=(--no-mmap)
+        fi
+
+        exec "$${cmd[@]}"

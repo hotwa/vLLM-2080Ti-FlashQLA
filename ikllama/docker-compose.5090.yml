@@ -1,0 +1,110 @@
+services:
+  # llama-server-gpu0:
+  #   image: hotwa/ik:latest
+  #   build:
+  #     context: .
+  #     dockerfile: docker/llama-server-cuda.Dockerfile
+  #   container_name: llama-server-gpu0
+  #   ports:
+  #     - "8080:8080"
+  #   shm_size: "2g"
+  #   volumes:
+  #     - ${MODEL_DIR:-./gguf}:/models:ro
+  #   gpus:
+  #     - driver: nvidia
+  #       device_ids: ["0"]
+  #       capabilities: ["gpu"]
+  #   environment:
+  #     - CUDA_VISIBLE_DEVICES=0
+  #     - NVIDIA_DRIVER_CAPABILITIES=compute,utility
+  #   restart: unless-stopped
+  #   command:
+  #     - --model
+  #     - /models/GLM-4.7-Flash-IQ5_K.gguf
+  #     - --alias
+  #     - ubergarm/GLM-4.7-Flash
+  #     - -c
+  #     - "202752"
+  #     - -ctk
+  #     - q8_0
+  #     - -ger
+  #     - --merge-qkv
+  #     - -mla
+  #     - "3"
+  #     - -amb
+  #     - "512"
+  #     - -ngl
+  #     - "99"
+  #     - -ub
+  #     - "4096"
+  #     - -b
+  #     - "4096"
+  #     - --threads
+  #     - "1"
+  #     - --host
+  #     - 0.0.0.0
+  #     - --port
+  #     - "8080"
+  #     - --jinja
+  #     - --no-mmap
+  #   healthcheck:
+  #     test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+  #     interval: 30s
+  #     timeout: 5s
+  #     retries: 5
+
+  llama-server-gpu1:
+    image: hotwa/ik:latest
+    build:
+      context: .
+      dockerfile: docker/llama-server-cuda.Dockerfile
+    # depends_on:
+    #   - llama-server-gpu0
+    container_name: llama-server-gpu1
+    ports:
+      - "8081:8080"
+    shm_size: "2g"
+    volumes:
+      - ${MODEL_DIR:-./gguf}:/models:ro
+    gpus:
+      - driver: nvidia
+        device_ids: ["1"]
+        capabilities: ["gpu"]
+    environment:
+      - NVIDIA_VISIBLE_DEVICES=0
+      - NVIDIA_DRIVER_CAPABILITIES=compute,utility
+    restart: unless-stopped
+    command:
+      - --model
+      - /models/GLM-4.7-Flash-IQ5_K.gguf
+      - --alias
+      - ubergarm/GLM-4.7-Flash
+      - -c
+      - "202752"
+      - -ctk
+      - q8_0
+      - -ger
+      - --merge-qkv
+      - -mla
+      - "3"
+      - -amb
+      - "512"
+      - -ngl
+      - "99"
+      - -ub
+      - "4096"
+      - -b
+      - "4096"
+      - --threads
+      - "1"
+      - --host
+      - 0.0.0.0
+      - --port
+      - "8080"
+      - --jinja
+      - --no-mmap
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 5

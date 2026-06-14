@@ -1,0 +1,120 @@
+services:
+  vllm-openclaw:
+    image: local/vllm-openai:qwen35-coder-v0.18.0-cu130
+    container_name: vllm-openclaw-qwen35
+    restart: unless-stopped
+    ipc: host
+    shm_size: "32gb"
+
+    ports:
+      - "8000:8000"
+
+    networks:
+      - openclaw-net
+
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+
+    volumes:
+      - ~/.cache/huggingface:/root/.cache/huggingface
+      - ./chat_templates:/app/chat_templates:ro
+      # - /mnt/d/vllm-kv-cache:/var/lib/vllm/kv_cache
+
+    environment:
+      HF_TOKEN: ${HF_TOKEN}
+      NVIDIA_VISIBLE_DEVICES: all
+      NVIDIA_DRIVER_CAPABILITIES: compute,utility
+      VLLM_LOGGING_LEVEL: INFO
+      VLLM_ALLOW_LONG_MAX_MODEL_LEN: "1"
+
+    command:
+      - mconcat/Qwen3.5-27B-Claude-4.6-Opus-Reasoning-Distilled-FP8-Dynamic
+      # - Qwen/Qwen3.5-27B-FP8
+      - --trust-remote-code
+      - --host
+      - 0.0.0.0
+      - --port
+      - "8000"
+
+      - --served-model-name
+      - Qwen3.5-27B
+
+      - --max-model-len
+      - "262144"
+      - --max-num-seqs
+      - "1"
+      - --gpu-memory-utilization
+      - "0.48"
+
+      - --enable-auto-tool-choice
+      - --tool-call-parser
+      - qwen35_coder
+      - --default-chat-template-kwargs
+      - '{"enable_thinking": false}'
+      - --chat-template
+      - /app/chat_templates/qwen35_openclaw_toolstable_v1.jinja
+      - --chat-template-content-format
+      - openai
+
+      - --kv-cache-dtype
+      - fp8
+
+      # - --kv-transfer-config
+      # - '{"kv_connector":"FlexKVConnector","kv_role":"kv_both","kv_buffer_device":"cpu","kv_buffer_size":10737418240}'
+
+      - --max-num-batched-tokens
+      - "32768"
+
+      # 如果后面 CUDA graph 不稳，再取消注释
+      # - --enforce-eager
+
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://127.0.0.1:8000/health >/dev/null || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 60
+      start_period: 300s
+
+  # ---- OpenClaw/OpenCode API Gateway ----
+  # Translates XML tool calls to standard OpenAI tool_calls format
+  # Use this port (11437) as the OpenAI base URL in OpenClaw / OpenCode
+  # openclaw-proxy:
+  #   build:
+  #     context: /srv/project/openclaw-ollama-toolcall-proxy
+  #     dockerfile: Dockerfile
+  #   container_name: openclaw-toolcall-proxy
+  #   restart: unless-stopped
+
+  #   ports:
+  #     - "11437:11437"
+
+  #   networks:
+  #     - openclaw-net
+
+  #   environment:
+  #     PROXY_MODE: vllm
+  #     PROXY_HOST: 0.0.0.0
+  #     PROXY_PORT: "11437"
+  #     # Uses Docker internal container name instead of host IP
+  #     VLLM_PROXY_TARGET: http://vllm-openclaw:8000
+  #     VLLM_DEFAULT_MODEL: Qwen3.5-27B
+
+  #   depends_on:
+  #     vllm-openclaw:
+  #       condition: service_healthy
+
+  #   healthcheck:
+  #     test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:11437/health 2>/dev/null || curl -fsS http://127.0.0.1:11437/health >/dev/null 2>&1 || exit 0"]
+  #     interval: 15s
+  #     timeout: 5s
+  #     retries: 10
+  #     start_period: 30s
+
+networks:
+  openclaw-net:
+    driver: bridge

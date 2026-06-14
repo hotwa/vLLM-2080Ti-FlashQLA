@@ -1,0 +1,84 @@
+services:
+  vllm:
+    build:
+      context: ./build/mconcat-nvfp4
+      dockerfile: Dockerfile
+    image: my-vllm-mconcat-nvfp4:0.19.0
+    container_name: qwopus35-27b-v3-nvfp4-rtx5090
+    restart: unless-stopped
+    ipc: host
+    shm_size: "32gb"
+
+    ports:
+      - "8001:8001"
+
+    # deploy:
+    #   resources:
+    #     reservations:
+    #       devices:
+    #         - driver: nvidia
+    #           count: all
+    #           capabilities: [gpu]
+    gpus:
+      - driver: nvidia
+        device_ids: ["0","1"]
+        capabilities: ["gpu"]
+    volumes:
+      - /home/zly/models/Qwopus3.5-27B-v3-NVFP4:/models/Qwopus3.5-27B-v3-NVFP4:ro
+      - ./chat_templates:/app/chat_templates:ro
+      - ./tool_parsers:/app/tool_parsers:ro
+
+    environment:
+      - HF_HUB_OFFLINE=1
+      # 设备可见性（只保留一份 environment）
+      - NVIDIA_VISIBLE_DEVICES=1
+      - CUDA_VISIBLE_DEVICES=1
+      # vLLM/HF
+      - VLLM_ALLOW_LONG_MAX_MODEL_LEN=1
+      - HF_HUB_ENABLE_HF_TRANSFER=0
+      # - HF_ENDPOINT=https://hf-mirror.com
+      - HF_TOKEN=${HF_TOKEN}
+      - NVIDIA_DRIVER_CAPABILITIES=compute,utility
+      - VLLM_LOGGING_LEVEL=INFO
+      - VLLM_NVFP4_GEMM_BACKEND=cutlass
+      - VLLM_MEMORY_PROFILER_ESTIMATE_CUDAGRAPHS=1
+
+    command:
+      - /models/Qwopus3.5-27B-v3-NVFP4
+      # - mconcat/Qwopus3.5-27B-v3-NVFP4
+      - --served-model-name
+      - Qwen3.5-27B
+      - --host
+      - 0.0.0.0
+      - --port
+      - "8001"
+      - --trust-remote-code
+      - --max-model-len
+      - "131072"
+      - --max-num-seqs
+      - "2"
+      - --attention-backend
+      - flashinfer
+      - --gpu-memory-utilization
+      - "0.9636"
+      - --kv-cache-dtype
+      - fp8_e4m3
+      - --enable-auto-tool-choice
+      - --tool-parser-plugin
+      - /app/tool_parsers/openclaw_xml_tool_parser.py
+      - --tool-call-parser
+      - openclaw_xml
+      - --skip-mm-profiling
+      - --default-chat-template-kwargs
+      - '{"enable_thinking": false}'
+      - --chat-template
+      - /app/chat_templates/qwopus_v3_template.jinja
+      - --chat-template-content-format
+      - openai
+
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://127.0.0.1:8001/health >/dev/null || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 60
+      start_period: 300s

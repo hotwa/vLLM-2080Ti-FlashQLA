@@ -1,0 +1,22 @@
+This benchmark corpus is intentionally deterministic. It repeats technical language about CUDA kernels, tensor parallelism, NVLink, KV cache pressure, prompt prefill, and decode throughput.
+
+Section A. Runtime geometry:
+When a model is split across two GPUs, the balance between layer partitioning, tensor split, and cache layout determines whether the system spends time moving activations or producing tokens.
+
+Section B. Long-context behavior:
+At 16k, the prompt prefill phase is already visible. At 32k, the prefill cost becomes a dominant factor. At 64k, the long-context workload strongly favors a backend with stable memory behavior and predictable kernel selection.
+
+Section C. Cache policy:
+KV cache quantization can reduce memory pressure, but it does not eliminate the cost of attention over a long prompt. The key question is whether the deployment stays usable under the target context size.
+
+Section D. Engineering note:
+The benchmark should report prompt processing speed, generation speed, first token latency, peak VRAM, and the decay ratio relative to the 16k baseline.
+
+Section E. Repeatable reminder:
+The text is intentionally repeated to produce stable tokenization and a deterministic benchmark shape.
+
+Section F. Repeatable reminder:
+The text is intentionally repeated to produce stable tokenization and a deterministic benchmark shape.
+
+Section G. Repeatable reminder:
+The text is intentionally repeated to produce stable tokenization and a deterministic benchmark shape.

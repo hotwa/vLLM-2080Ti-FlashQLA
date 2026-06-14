@@ -1,0 +1,152 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1400" height="900" viewBox="0 0 1400 900" role="img" aria-labelledby="title desc">
+  <title id="title">Qwen3.6 27B FP8 KV Throughput</title>
+  <desc id="desc">Grouped bar charts for prefill and decode throughput across noMTP, MTP3, FP16, INT8, TQK8V4, and TQ4NC KV precision.</desc>
+
+  <defs>
+    <linearGradient id="bg" x1="0" x2="0" y1="0" y2="1"><stop offset="0" stop-color="#fbfcff"/><stop offset="1" stop-color="#f2f5fa"/></linearGradient>
+    <style>
+      .card { fill: #ffffff; stroke: #d8deea; stroke-width: 1; }
+      .grid { stroke: #e7ebf2; stroke-width: 1; }
+      .axis { stroke: #aab4c3; stroke-width: 1.5; }
+      .split { stroke: #c4ccda; stroke-width: 1.5; stroke-dasharray: 7 7; }
+      .title { font: 700 34px Arial, Helvetica, sans-serif; fill: #141b2d; }
+      .sub { font: 500 16px Arial, Helvetica, sans-serif; fill: #5b6677; }
+      .section { font: 700 22px Arial, Helvetica, sans-serif; fill: #1d2738; }
+      .tick { font: 500 12px Arial, Helvetica, sans-serif; fill: #7a8494; }
+      .label { font: 700 13px Arial, Helvetica, sans-serif; fill: #2b3547; }
+      .num4k { font: 700 10px Arial, Helvetica, sans-serif; fill: #356fe8; }
+      .num64k { font: 700 10px Arial, Helvetica, sans-serif; fill: #0c8e66; }
+      .mode { font: 800 15px Arial, Helvetica, sans-serif; fill: #1d2738; }
+      .legend { font: 600 14px Arial, Helvetica, sans-serif; fill: #364255; }
+      .note { font: 600 14px Arial, Helvetica, sans-serif; fill: #4e5b70; }
+      .bar4k { fill: #356fe8; }
+      .bar64k { fill: #10a875; }
+    </style>
+  </defs>
+
+  <rect x="0" y="0" width="1400" height="900" fill="url(#bg)"/>
+  <text class="title" x="48" y="54">Qwen3.6 27B FP8 KV Throughput</text>
+  <text class="sub" x="48" y="84">noMTP vs MTP3 · 4 KV precision settings · single request throughput</text>
+  <rect class="card" x="48" y="106" width="1300" height="58" rx="16"/>
+  <rect class="bar4k" x="76" y="126" width="28" height="18" rx="4"/>
+  <text class="legend" x="118" y="141">PP4096/TG128</text>
+  <rect class="bar64k" x="310" y="126" width="28" height="18" rx="4"/>
+  <text class="legend" x="352" y="141">PP65536/TG512</text>
+  <text class="note" x="628" y="141">MTP3 improves decode; long-context quantized KV falls back clearly.</text>
+<text class="section" x="64" y="225">Prefill</text>
+<text class="sub" x="158" y="225">prompt tokens / second</text>
+<rect class="card" x="48" y="238" width="1300" height="310" rx="18"/>
+<line class="grid" x1="92" y1="436.0" x2="1318" y2="436.0"/>
+<text class="tick" x="58" y="440.0">0</text>
+<line class="grid" x1="92" y1="388.6" x2="1318" y2="388.6"/>
+<text class="tick" x="58" y="392.6">500</text>
+<line class="grid" x1="92" y1="341.3" x2="1318" y2="341.3"/>
+<text class="tick" x="58" y="345.3">1000</text>
+<line class="grid" x1="92" y1="293.9" x2="1318" y2="293.9"/>
+<text class="tick" x="58" y="297.9">1500</text>
+<line class="grid" x1="92" y1="256.0" x2="1318" y2="256.0"/>
+<text class="tick" x="58" y="260.0">1900</text>
+<line class="axis" x1="92" y1="256" x2="92" y2="436"/>
+<line class="axis" x1="92" y1="436" x2="1318" y2="436"/>
+<text class="mode" x="418" y="518" text-anchor="middle">noMTP</text>
+<rect class="bar4k" x="168" y="277.1" width="24" height="158.9" rx="4"><title>noMTP FP16 PP4096/TG128: 1677.0 tok/s</title></rect>
+<rect class="bar64k" x="202" y="312.5" width="24" height="123.5" rx="4"><title>noMTP FP16 PP65536/TG512: 1303.9 tok/s</title></rect>
+<text class="label" x="202" y="459" text-anchor="middle">FP16</text>
+<text class="num4k" x="180.0" y="271.1" text-anchor="middle">1677.0</text>
+<text class="num64k" x="214.0" y="306.5" text-anchor="middle">1303.9</text>
+<rect class="bar4k" x="312" y="278.5" width="24" height="157.5" rx="4"><title>noMTP INT8 PP4096/TG128: 1663.0 tok/s</title></rect>
+<rect class="bar64k" x="346" y="315.2" width="24" height="120.8" rx="4"><title>noMTP INT8 PP65536/TG512: 1274.8 tok/s</title></rect>
+<text class="label" x="346" y="459" text-anchor="middle">INT8</text>
+<text class="num4k" x="324.0" y="272.5" text-anchor="middle">1663.0</text>
+<text class="num64k" x="358.0" y="309.2" text-anchor="middle">1274.8</text>
+<rect class="bar4k" x="456" y="283.3" width="24" height="152.7" rx="4"><title>noMTP TQK8V4 PP4096/TG128: 1612.1 tok/s</title></rect>
+<rect class="bar64k" x="490" y="314.9" width="24" height="121.1" rx="4"><title>noMTP TQK8V4 PP65536/TG512: 1277.9 tok/s</title></rect>
+<text class="label" x="490" y="459" text-anchor="middle">TQK8V4</text>
+<text class="num4k" x="468.0" y="277.3" text-anchor="middle">1612.1</text>
+<text class="num64k" x="502.0" y="308.9" text-anchor="middle">1277.9</text>
+<rect class="bar4k" x="600" y="279.1" width="24" height="156.9" rx="4"><title>noMTP TQ4NC PP4096/TG128: 1656.4 tok/s</title></rect>
+<rect class="bar64k" x="634" y="315.3" width="24" height="120.7" rx="4"><title>noMTP TQ4NC PP65536/TG512: 1273.9 tok/s</title></rect>
+<text class="label" x="634" y="459" text-anchor="middle">TQ4NC</text>
+<text class="num4k" x="612.0" y="273.1" text-anchor="middle">1656.4</text>
+<text class="num64k" x="646.0" y="309.3" text-anchor="middle">1273.9</text>
+<text class="mode" x="1058" y="518" text-anchor="middle">MTP3</text>
+<rect class="bar4k" x="808" y="283.1" width="24" height="152.9" rx="4"><title>MTP3 FP16 PP4096/TG128: 1614.1 tok/s</title></rect>
+<rect class="bar64k" x="842" y="317.2" width="24" height="118.8" rx="4"><title>MTP3 FP16 PP65536/TG512: 1253.9 tok/s</title></rect>
+<text class="label" x="842" y="459" text-anchor="middle">FP16</text>
+<text class="num4k" x="820.0" y="277.1" text-anchor="middle">1614.1</text>
+<text class="num64k" x="854.0" y="311.2" text-anchor="middle">1253.9</text>
+<rect class="bar4k" x="952" y="283.5" width="24" height="152.5" rx="4"><title>MTP3 INT8 PP4096/TG128: 1609.9 tok/s</title></rect>
+<rect class="bar64k" x="986" y="319.7" width="24" height="116.3" rx="4"><title>MTP3 INT8 PP65536/TG512: 1227.9 tok/s</title></rect>
+<text class="label" x="986" y="459" text-anchor="middle">INT8</text>
+<text class="num4k" x="964.0" y="277.5" text-anchor="middle">1609.9</text>
+<text class="num64k" x="998.0" y="313.7" text-anchor="middle">1227.9</text>
+<rect class="bar4k" x="1096" y="283.0" width="24" height="153.0" rx="4"><title>MTP3 TQK8V4 PP4096/TG128: 1614.6 tok/s</title></rect>
+<rect class="bar64k" x="1130" y="319.3" width="24" height="116.7" rx="4"><title>MTP3 TQK8V4 PP65536/TG512: 1231.7 tok/s</title></rect>
+<text class="label" x="1130" y="459" text-anchor="middle">TQK8V4</text>
+<text class="num4k" x="1108.0" y="277.0" text-anchor="middle">1614.6</text>
+<text class="num64k" x="1142.0" y="313.3" text-anchor="middle">1231.7</text>
+<rect class="bar4k" x="1240" y="284.2" width="24" height="151.8" rx="4"><title>MTP3 TQ4NC PP4096/TG128: 1602.8 tok/s</title></rect>
+<rect class="bar64k" x="1274" y="319.7" width="24" height="116.3" rx="4"><title>MTP3 TQ4NC PP65536/TG512: 1227.2 tok/s</title></rect>
+<text class="label" x="1274" y="459" text-anchor="middle">TQ4NC</text>
+<text class="num4k" x="1252.0" y="278.2" text-anchor="middle">1602.8</text>
+<text class="num64k" x="1286.0" y="313.7" text-anchor="middle">1227.2</text>
+<line class="split" x1="733.0" y1="236" x2="733.0" y2="511"/>
+<text class="section" x="64" y="590">Decode</text>
+<text class="sub" x="158" y="590">generated tokens / second</text>
+<rect class="card" x="48" y="603" width="1300" height="310" rx="18"/>
+<line class="grid" x1="92" y1="801.0" x2="1318" y2="801.0"/>
+<text class="tick" x="58" y="805.0">0</text>
+<line class="grid" x1="92" y1="760.1" x2="1318" y2="760.1"/>
+<text class="tick" x="58" y="764.1">25</text>
+<line class="grid" x1="92" y1="719.2" x2="1318" y2="719.2"/>
+<text class="tick" x="58" y="723.2">50</text>
+<line class="grid" x1="92" y1="678.3" x2="1318" y2="678.3"/>
+<text class="tick" x="58" y="682.3">75</text>
+<line class="grid" x1="92" y1="637.4" x2="1318" y2="637.4"/>
+<text class="tick" x="58" y="641.4">100</text>
+<line class="axis" x1="92" y1="621" x2="92" y2="801"/>
+<line class="axis" x1="92" y1="801" x2="1318" y2="801"/>
+<text class="mode" x="418" y="883" text-anchor="middle">noMTP</text>
+<rect class="bar4k" x="168" y="747.2" width="24" height="53.8" rx="4"><title>noMTP FP16 PP4096/TG128: 32.9 tok/s</title></rect>
+<rect class="bar64k" x="202" y="753.4" width="24" height="47.6" rx="4"><title>noMTP FP16 PP65536/TG512: 29.1 tok/s</title></rect>
+<text class="label" x="202" y="824" text-anchor="middle">FP16</text>
+<text class="num4k" x="180.0" y="741.2" text-anchor="middle">32.9</text>
+<text class="num64k" x="214.0" y="747.4" text-anchor="middle">29.1</text>
+<rect class="bar4k" x="312" y="746.2" width="24" height="54.8" rx="4"><title>noMTP INT8 PP4096/TG128: 33.5 tok/s</title></rect>
+<rect class="bar64k" x="346" y="745.9" width="24" height="55.1" rx="4"><title>noMTP INT8 PP65536/TG512: 33.7 tok/s</title></rect>
+<text class="label" x="346" y="824" text-anchor="middle">INT8</text>
+<text class="num4k" x="324.0" y="740.2" text-anchor="middle">33.5</text>
+<text class="num64k" x="358.0" y="739.9" text-anchor="middle">33.7</text>
+<rect class="bar4k" x="456" y="751.4" width="24" height="49.6" rx="4"><title>noMTP TQK8V4 PP4096/TG128: 30.3 tok/s</title></rect>
+<rect class="bar64k" x="490" y="767.1" width="24" height="33.9" rx="4"><title>noMTP TQK8V4 PP65536/TG512: 20.7 tok/s</title></rect>
+<text class="label" x="490" y="824" text-anchor="middle">TQK8V4</text>
+<text class="num4k" x="468.0" y="745.4" text-anchor="middle">30.3</text>
+<text class="num64k" x="502.0" y="761.1" text-anchor="middle">20.7</text>
+<rect class="bar4k" x="600" y="752.1" width="24" height="48.9" rx="4"><title>noMTP TQ4NC PP4096/TG128: 29.9 tok/s</title></rect>
+<rect class="bar64k" x="634" y="768.9" width="24" height="32.1" rx="4"><title>noMTP TQ4NC PP65536/TG512: 19.6 tok/s</title></rect>
+<text class="label" x="634" y="824" text-anchor="middle">TQ4NC</text>
+<text class="num4k" x="612.0" y="746.1" text-anchor="middle">29.9</text>
+<text class="num64k" x="646.0" y="762.9" text-anchor="middle">19.6</text>
+<text class="mode" x="1058" y="883" text-anchor="middle">MTP3</text>
+<rect class="bar4k" x="808" y="676.6" width="24" height="124.4" rx="4"><title>MTP3 FP16 PP4096/TG128: 76.0 tok/s</title></rect>
+<rect class="bar64k" x="842" y="685.1" width="24" height="115.9" rx="4"><title>MTP3 FP16 PP65536/TG512: 70.8 tok/s</title></rect>
+<text class="label" x="842" y="824" text-anchor="middle">FP16</text>
+<text class="num4k" x="820.0" y="670.6" text-anchor="middle">76.0</text>
+<text class="num64k" x="854.0" y="679.1" text-anchor="middle">70.8</text>
+<rect class="bar4k" x="952" y="679.3" width="24" height="121.7" rx="4"><title>MTP3 INT8 PP4096/TG128: 74.4 tok/s</title></rect>
+<rect class="bar64k" x="986" y="731.0" width="24" height="70.0" rx="4"><title>MTP3 INT8 PP65536/TG512: 42.8 tok/s</title></rect>
+<text class="label" x="986" y="824" text-anchor="middle">INT8</text>
+<text class="num4k" x="964.0" y="673.3" text-anchor="middle">74.4</text>
+<text class="num64k" x="998.0" y="725.0" text-anchor="middle">42.8</text>
+<rect class="bar4k" x="1096" y="685.8" width="24" height="115.2" rx="4"><title>MTP3 TQK8V4 PP4096/TG128: 70.4 tok/s</title></rect>
+<rect class="bar64k" x="1130" y="740.6" width="24" height="60.4" rx="4"><title>MTP3 TQK8V4 PP65536/TG512: 36.9 tok/s</title></rect>
+<text class="label" x="1130" y="824" text-anchor="middle">TQK8V4</text>
+<text class="num4k" x="1108.0" y="679.8" text-anchor="middle">70.4</text>
+<text class="num64k" x="1142.0" y="734.6" text-anchor="middle">36.9</text>
+<rect class="bar4k" x="1240" y="683.7" width="24" height="117.3" rx="4"><title>MTP3 TQ4NC PP4096/TG128: 71.7 tok/s</title></rect>
+<rect class="bar64k" x="1274" y="746.0" width="24" height="55.0" rx="4"><title>MTP3 TQ4NC PP65536/TG512: 33.6 tok/s</title></rect>
+<text class="label" x="1274" y="824" text-anchor="middle">TQ4NC</text>
+<text class="num4k" x="1252.0" y="677.7" text-anchor="middle">71.7</text>
+<text class="num64k" x="1286.0" y="740.0" text-anchor="middle">33.6</text>
+<line class="split" x1="733.0" y1="601" x2="733.0" y2="876"/>
+</svg>

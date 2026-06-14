@@ -1,0 +1,12 @@
+/.env
+/.venv/
+/logs/*
+!/logs/.gitkeep
+/hf-cache/*
+!/hf-cache/.gitkeep
+/models/gguf/*
+!/models/gguf/.gitkeep
+/third_party/ik_llama.cpp/
+/artifacts/*
+!/artifacts/.gitkeep
+*.log

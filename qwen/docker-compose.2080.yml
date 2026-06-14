@@ -1,0 +1,82 @@
+services:
+  qwen3-5-server:
+    image: hotwa/vllm:nightly
+    build:
+      context: .
+      dockerfile: Dockerfile.night
+    container_name: qwen3-5-27b-int4
+    ports:
+      - "8000:8000"
+    volumes:
+      - ~/.cache/huggingface:/root/.cache/huggingface
+    command:
+      - "Qwen/Qwen3.5-27B-GPTQ-Int4"
+      - "--quantization"
+      - "gptq_marlin"
+      - "--trust-remote-code"
+      - "--served-model-name"
+      - "qwen3.5-27b"
+      - "--dtype"
+      - "half"
+      - "--attention-backend"
+      - "FLASHINFER"
+      - "--tensor-parallel-size"
+      - "2"
+      - "--max-model-len"
+      - "65536" 
+      - "--gpu-memory-utilization"
+      - "0.90"
+      - "--language-model-only" 
+      - "--reasoning-parser"
+      - "qwen3"
+      - "--tool-call-parser"
+      - "qwen3_coder"
+      - "--enable-auto-tool-choice"
+      - "--speculative-config"
+      - '{"method":"qwen3_next_mtp","num_speculative_tokens":2}'
+      - "--hf-overrides"
+      - '{"text_config": {"rope_parameters": {"mrope_interleaved": true, "mrope_section": [11, 11, 10], "rope_type": "yarn", "rope_theta": 10000000, "partial_rotary_factor": 0.25, "factor": 4.0, "original_max_position_embeddings": 262144}}}'
+      - "--distributed-executor-backend"
+      - "mp"
+      - "--host"
+      - "0.0.0.0"
+      - "--port"
+      - "8000"
+      - "--enable-prefix-caching"
+      - "--disable-custom-all-reduce"
+      - "--hf-overrides"
+      - '{"text_config":{"rope_parameters":{"rope_type":"yarn","rope_theta":10000000,"partial_rotary_factor":0.25,"factor":4.0,"original_max_position_embeddings":262144}}}'
+      - "--enforce-eager" 
+    environment:
+      - NVIDIA_VISIBLE_DEVICES=all
+      - CUDA_VISIBLE_DEVICES=0,1
+      - VLLM_ALLOW_LONG_MAX_MODEL_LEN=1
+      - HF_HUB_ENABLE_HF_TRANSFER=0
+      - VLLM_DISABLE_FLASH_ATTN=1 
+      - VLLM_USE_FLASH_ATTN=0
+      - NCCL_P2P_LEVEL=NVL
+      # - NCCL_P2P_DISABLE=1 # 确保注释掉这行，让你的物理 NVLink 生效
+      - NCCL_SHM_DISABLE=0
+      - NCCL_IB_DISABLE=1
+      - PYTORCH_ALLOC_CONF=expandable_segments:True
+      - HF_ENDPOINT=https://hf-mirror.com
+      - HF_TOKEN={:HF_TOKEN}
+    tty: true
+    shm_size: "16gb"
+    ulimits:
+      memlock: -1
+      stack: 67108864
+    restart: unless-stopped
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 2
+              capabilities: [gpu]
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://127.0.0.1:8000/ping >/dev/null"]
+      interval: 10s
+      timeout: 5s
+      retries: 120
+      start_period: 300s

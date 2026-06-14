@@ -1,0 +1,16 @@
+# 使用 vLLM nightly 镜像（GLM-4.6V 需要最新版本支持）
+FROM vllm/vllm-openai:nightly
+
+# 更换阿里云镜像源
+RUN sed -i 's|http://archive.ubuntu.com|https://mirrors.aliyun.com|g' /etc/apt/sources.list && \
+    sed -i 's|http://security.ubuntu.com|https://mirrors.aliyun.com|g' /etc/apt/sources.list
+
+# 安装 git（pip 从 GitHub 安装需要）
+RUN apt-get update && apt-get install -y git && rm -rf /var/lib/apt/lists/*
+
+# 安装 transformers 开发版 + numpy 降级
+RUN pip install --upgrade git+https://github.com/huggingface/transformers.git && \
+    pip install "numpy<2.3"
+
+# 可选：如果需要 ModelScope 支持
+# RUN pip install modelscope

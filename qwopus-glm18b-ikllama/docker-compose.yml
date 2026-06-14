@@ -1,0 +1,66 @@
+services:
+  server:
+    build:
+      context: .
+      dockerfile: build/Dockerfile
+      args:
+        CUDA_VERSION: ${CUDA_VERSION:-12.8.1}
+        CMAKE_CUDA_ARCHITECTURES: ${CMAKE_CUDA_ARCHITECTURES:-75}
+        IK_LLAMA_REPO: ${IK_LLAMA_REPO:-https://github.com/ikawrakow/ik_llama.cpp}
+        IK_LLAMA_REF: ${IK_LLAMA_REF:-main}
+    image: hotwa/qwopus-glm18b-ikllama-server:${IK_LLAMA_REF:-main}
+    container_name: qwopus-glm18b-ikllama-server
+    restart: unless-stopped
+    ipc: host
+    shm_size: "2g"
+    # 暂时限制为单卡（GPU 0）以排查多卡初始化崩溃问题
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              device_ids: ['0']
+              capabilities: [gpu]
+    working_dir: /workspace
+    env_file:
+      - path: ./.env
+        required: false
+    environment:
+      HOST: ${HOST:-0.0.0.0}
+      PORT: ${PORT:-8080}
+      MODEL_PATH: ${MODEL_PATH:-./models/Qwopus-GLM-18B-Healed-Q4_K_M.gguf}
+      MODEL_NAME: ${MODEL_NAME:-}
+      API_KEY: ${API_KEY:-}
+      CHAT_TEMPLATE_FILE: ${CHAT_TEMPLATE_FILE:-}
+      CTX_SIZE: ${CTX_SIZE:-65536}
+      GPU_LAYERS: ${GPU_LAYERS:-999}
+      BATCH_SIZE: ${BATCH_SIZE:-2048}
+      UBATCH_SIZE: ${UBATCH_SIZE:-512}
+      THREADS: ${THREADS:-8}
+      N_PARALLEL: ${N_PARALLEL:-1}
+      CACHE_TYPE_K: ${CACHE_TYPE_K:-q8_0}
+      CACHE_TYPE_V: ${CACHE_TYPE_V:-q8_0}
+      FLASH_ATTN: ${FLASH_ATTN:-1}
+      JINJA: ${JINJA:-0}
+      NO_CONTEXT_SHIFT: ${NO_CONTEXT_SHIFT:-1}
+      NO_MMAP: ${NO_MMAP:-1}
+      SPLIT_MODE: ${SPLIT_MODE:-}
+      TENSOR_SPLIT: ${TENSOR_SPLIT:-}
+    volumes:
+      - ./models:/workspace/models:ro
+      - ./logs:/workspace/logs
+      - ./run:/workspace/run
+      - ./scripts/container_server.sh:/workspace/scripts/container_server.sh:ro
+    ports:
+      - "${PORT:-8080}:${PORT:-8080}"
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "if [ -n \"$$API_KEY\" ]; then curl -fsS -H \"Authorization: Bearer $$API_KEY\" http://127.0.0.1:$$PORT/v1/models >/dev/null; else curl -fsS http://127.0.0.1:$$PORT/v1/models >/dev/null; fi",
+        ]
+      interval: 15s
+      timeout: 5s
+      retries: 20
+      start_period: 120s
+    command: ["bash", "/workspace/scripts/container_server.sh"]

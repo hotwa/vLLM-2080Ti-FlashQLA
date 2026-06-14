@@ -1,0 +1,76 @@
+services:
+  llama-server-gpu:
+    image: hotwa/ik:latest
+    build:
+      context: .
+      dockerfile: docker/llama-server-cuda.Dockerfile
+      args:
+        CUDA_DOCKER_ARCH: "75"
+    container_name: llama-server-gpu
+    ports:
+      - "8081:8080"
+    shm_size: "2g"
+    volumes:
+      - ${MODEL_DIR:-./gguf}:/models:ro
+      - ./chat_template.jinja:/config/chat_template.jinja:ro
+    gpus:
+      - driver: nvidia
+        device_ids: ["0","1"]
+        capabilities: ["gpu"]
+    environment:
+      - NVIDIA_VISIBLE_DEVICES=0,1
+      - NVIDIA_DRIVER_CAPABILITIES=compute,utility
+    restart: unless-stopped
+    command:
+      - --model
+      - /models/${MODEL_FILE:-Qwen3.5-27B-IQ6_K.gguf}
+      - --alias
+      - Qwen3.5-27B
+      - --split-mode
+      - graph
+      - --tensor-split
+      - 50,50
+      - -c
+      - "262144"
+      - -ctk
+      - q8_0
+      # 如果启动后显存仍然紧张，可再试：
+      # - -ctv
+      # - q8_0
+      - -ger
+      - -mla
+      - "3"
+      - -amb
+      - "256"
+      - -ngl
+      - "99"
+      - -ub
+      - "512"
+      - -b
+      - "2048"
+      - --threads
+      - "4"
+      - --host
+      - 0.0.0.0
+      - --port
+      - "8080"
+      - --jinja
+      - --chat-template-file
+      - /config/chat_template.jinja
+      - --reasoning-format
+      - none
+      - --reasoning-tokens
+      - none
+      - --no-mmap
+      # 初期先别动这些，稳定后再看
+      # - --cache-ram
+      # - "4096"
+      # - --cache-ram-similarity
+      # - "0.8"
+      # - -sps
+      # - "0"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 5

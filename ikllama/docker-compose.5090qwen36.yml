@@ -1,0 +1,71 @@
+services:
+  llama-server-gpu:
+    image: hotwa/ik:latest
+    build:
+      context: .
+      dockerfile: docker/llama-server-cuda.Dockerfile
+    # depends_on:
+    #   - llama-server-gpu0
+    container_name: llama-server-gpu
+    ports:
+      - "8082:8080"
+    shm_size: "2g"
+    volumes:
+      - ${MODEL_DIR:-/home/zly/project/modelscope_qwen35_27b_quantized/artifacts/qwen35_27b/quantized_gguf}:/models:ro
+    gpus:
+      - driver: nvidia
+        device_ids: ["0","1"]
+        capabilities: ["gpu"]
+    environment:
+      - NVIDIA_VISIBLE_DEVICES=0,1
+      - NVIDIA_DRIVER_CAPABILITIES=compute,utility
+    restart: unless-stopped
+    command:
+      - --model
+      - /models/${MODEL_FILE:-Qwopus3.6-27B-v2-MTP-Q4_K_M.gguf}
+      - --alias
+      - Qwen3.6-27B
+      - --split-mode
+      - graph
+      - --tensor-split
+      - 50,50
+      - -c
+      - "2048"
+      - -ctk
+      - q8_0
+      - -ger
+      - -mla
+      - "3"
+      - -amb
+      - "512"
+      - -ngl
+      - "99"
+      - -ub
+      - "256"
+      - -b
+      - "1024"
+      - --threads
+      - "8"
+      - --host
+      - 0.0.0.0
+      - --port
+      - "8080"
+      - --jinja
+      # - --chat-template-file
+      # - /config/chat_template.jinja
+      - --no-mmap
+      # - -sps
+      # - "0"
+
+      # - --cache-ram
+      # - "4096"
+
+      # - --cache-ram-similarity
+      # - "0.8"
+      - --reasoning-tokens
+      - none
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 5

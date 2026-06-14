@@ -1,0 +1,12 @@
+.env
+.venv
+logs
+hf-cache
+results
+artifacts
+models/gguf
+third_party/ik_llama.cpp/.git
+third_party/ik_llama.cpp/.github
+third_party/ik_llama.cpp/.gitignore
+third_party/ik_llama.cpp/build
+**/*.log

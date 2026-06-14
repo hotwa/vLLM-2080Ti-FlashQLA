@@ -1,0 +1,67 @@
+services:
+  qwen36-ik-main-262k:
+    build:
+      context: ./build/ik_llama_main_262k
+      dockerfile: Dockerfile
+    image: local/ik-llama-cpp:qwen36-main-262k-cuda
+    container_name: qwen36-27b-ik-main-262k
+    restart: unless-stopped
+    ipc: host
+    shm_size: "16gb"
+
+    ports:
+      - "${QWEN_IK_MAIN_HOST_PORT:-8080}:8080"
+
+    volumes:
+      - ./models:/models
+      - ./.hf-cache:/root/.cache/huggingface
+
+    environment:
+      HF_HOME: /root/.cache/huggingface
+      HF_ENDPOINT: ${HF_ENDPOINT:-https://hf-mirror.com}
+      HF_HUB_ENABLE_HF_TRANSFER: "0"
+      CUDA_VISIBLE_DEVICES: ${CUDA_VISIBLE_DEVICES:-1,0}
+      NVIDIA_VISIBLE_DEVICES: ${NVIDIA_VISIBLE_DEVICES:-1,0}
+      NVIDIA_DRIVER_CAPABILITIES: compute,utility
+      NCCL_P2P_LEVEL: NVL
+      NCCL_SHM_DISABLE: "0"
+      NCCL_IB_DISABLE: "1"
+      MODEL_PATH: ${MODEL_PATH:-/models/Qwen3.6-27B-UD-Q4_K_XL.gguf}
+      MODEL_REPO: ${MODEL_REPO:-unsloth/Qwen3.6-27B-MTP-GGUF}
+      MODEL_FILE: ${MODEL_FILE:-Qwen3.6-27B-UD-Q4_K_XL.gguf}
+      MODEL_ALIAS: ${MODEL_ALIAS:-Qwen3.6-27B}
+      MTP: ${MTP:-on}
+      SPEC_DRAFT_N_MAX: ${SPEC_DRAFT_N_MAX:-1}
+      CTX_SIZE: ${CTX_SIZE:-262144}
+      N_PREDICT: ${N_PREDICT:-1024}
+      NP: ${NP:-1}
+      BATCH_SIZE: ${BATCH_SIZE:-128}
+      UBATCH_SIZE: ${UBATCH_SIZE:-64}
+      N_GPU_LAYERS: ${N_GPU_LAYERS:-999}
+      SPLIT_MODE: ${SPLIT_MODE:-graph}
+      TENSOR_SPLIT: ${TENSOR_SPLIT:-40,60}
+      FLASH_ATTN: ${FLASH_ATTN:-on}
+      REASONING: ${REASONING:-off}
+      EXTRA_ARGS: ${EXTRA_ARGS:---cache-ram 10240}
+
+    ulimits:
+      memlock: -1
+      stack: 67108864
+
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: ${GPU_COUNT:-2}
+              capabilities: [gpu]
+
+    entrypoint:
+      - /usr/local/bin/start-main-262k.sh
+
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://127.0.0.1:8080/health >/dev/null || exit 1"]
+      interval: 20s
+      timeout: 5s
+      retries: 30
+      start_period: 300s

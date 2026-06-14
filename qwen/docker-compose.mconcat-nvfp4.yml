@@ -1,0 +1,72 @@
+services:
+  vllm:
+    build:
+      context: ./build/mconcat-nvfp4
+      dockerfile: Dockerfile
+    image: my-vllm-mconcat-nvfp4:0.19.0
+    container_name: qwopus35-27b-v3-nvfp4
+    restart: unless-stopped
+    ipc: host
+    shm_size: "32gb"
+
+    ports:
+      - "8000:8000"
+
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+
+    volumes:
+      - ./.hf-cache:/root/.cache/huggingface
+      - ./chat_templates:/app/chat_templates:ro
+      - ./tool_parsers:/app/tool_parsers:ro
+
+    environment:
+      - HF_TOKEN=${HF_TOKEN}
+      - NVIDIA_VISIBLE_DEVICES=all
+      - NVIDIA_DRIVER_CAPABILITIES=compute,utility
+      - VLLM_LOGGING_LEVEL=INFO
+      - VLLM_NVFP4_GEMM_BACKEND=cutlass
+
+    command:
+      - mconcat/Qwopus3.5-27B-v3-NVFP4
+      - --served-model-name
+      - Qwen3.5-27B
+      - --host
+      - 0.0.0.0
+      - --port
+      - "8000"
+      - --trust-remote-code
+      - --attention-backend
+      - flashinfer
+      - --max-model-len
+      - "262144"
+      - --max-num-seqs
+      - "3"
+      - --gpu-memory-utilization
+      - "0.92"
+      - --kv-cache-dtype
+      - auto
+      - --enable-auto-tool-choice
+      - --tool-parser-plugin
+      - /app/tool_parsers/openclaw_xml_tool_parser.py
+      - --tool-call-parser
+      - openclaw_xml
+      - --skip-mm-profiling
+      - --default-chat-template-kwargs
+      - '{"enable_thinking": false}'
+      - --chat-template
+      - /app/chat_templates/qwopus_v3_template.jinja
+      - --chat-template-content-format
+      - openai
+
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://127.0.0.1:8000/health >/dev/null || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 60
+      start_period: 300s

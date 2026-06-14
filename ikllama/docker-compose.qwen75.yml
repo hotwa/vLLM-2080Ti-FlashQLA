@@ -1,0 +1,60 @@
+services:
+  llama-server-gpu0:
+    image: hotwa/ik:latest
+    build:
+      context: docker
+      dockerfile: llama-server-cuda.Dockerfile
+      args:
+          CUDA_DOCKER_ARCH: "75"
+    container_name: llama-server-gpu
+    ports:
+      - "8081:8080"
+    shm_size: "2g"
+    volumes:
+      - ${MODEL_DIR:-./gguf}:/models:ro
+    gpus:
+      - driver: nvidia
+        device_ids: ["0","1"]
+        capabilities: ["gpu"]
+    environment:
+      - NVIDIA_VISIBLE_DEVICES=0,1
+      - NVIDIA_DRIVER_CAPABILITIES=compute,utility
+    restart: unless-stopped
+    command:
+      - --model
+      - /models/Qwen_Qwen3.5-27B-Q4_K_M.gguf
+      - --alias
+      - Qwen3.5-27B
+      - --split-mode
+      - graph
+      - --tensor-split
+      - 50,50
+      - -c
+      - "262144"
+      - -ctk
+      - q8_0
+      - -ger
+      - --merge-qkv
+      - -mla
+      - "3"
+      - -amb
+      - "512"
+      - -ngl
+      - "99"
+      - -ub
+      - "4096"
+      - -b
+      - "4096"
+      - --threads
+      - "2"
+      - --host
+      - 0.0.0.0
+      - --port
+      - "8080"
+      - --jinja
+      - --no-mmap
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 5

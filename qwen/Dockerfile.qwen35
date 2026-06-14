@@ -1,0 +1,35 @@
+# syntax=docker/dockerfile:1.7
+# Qwen3.5 Coder tool parser patched vLLM image
+# Based on official v0.18.0 release with qwen35_coder parser from PR #35347
+
+ARG BASE_IMAGE=vllm/vllm-openai:v0.18.0-cu130
+FROM ${BASE_IMAGE}
+
+SHELL ["/bin/bash", "-lc"]
+ENV DEBIAN_FRONTEND=noninteractive \
+    PIP_DISABLE_PIP_VERSION_CHECK=1 \
+    PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1
+
+WORKDIR /workspace
+
+# Copy the patched tool parser files
+COPY qwen35coder_tool_parser.py /tmp/patch/qwen35coder_tool_parser.py
+COPY __init__.py /tmp/patch/__init__.py
+
+# Install the patched files into the existing vllm installation
+RUN VLLM_PATH=$(python3 -c "import vllm; print(vllm.__path__[0])") && \
+    echo "vllm installed at: $VLLM_PATH" && \
+    cp /tmp/patch/qwen35coder_tool_parser.py "$VLLM_PATH/tool_parsers/" && \
+    cp /tmp/patch/__init__.py "$VLLM_PATH/tool_parsers/" && \
+    echo "qwen35_coder parser installed successfully" && \
+    python3 -c "from vllm.tool_parsers import _TOOL_PARSERS_TO_REGISTER; print('qwen35_coder registered:', 'qwen35_coder' in _TOOL_PARSERS_TO_REGISTER)" && \
+    rm -rf /tmp/patch /root/.cache/pip
+
+# Optionally upgrade transformers for Qwen3.5 compatibility
+RUN pip install -U "transformers>=4.51.0" tokenizers accelerate --no-cache-dir && \
+    python3 -c "import transformers; print('transformers:', transformers.__version__)" && \
+    rm -rf /root/.cache
+
+# Verify the installation
+RUN python3 -c "from vllm.tool_parsers.qwen35coder_tool_parser import Qwen35CoderToolParser; print('Qwen35CoderToolParser loaded successfully')"

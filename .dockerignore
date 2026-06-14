@@ -1,0 +1,38 @@
+# Version control
+.git
+.github
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+.venv/
+venv/
+
+# Build artifacts
+build/
+build-logs/
+dist/
+*.egg
+.deps/
+out/
+
+# Runtime caches
+triton-cache/
+torchinductor-cache/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Docs (not needed in image)
+docs/
+*.md
+!README.md

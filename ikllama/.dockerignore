@@ -1,0 +1,9 @@
+# 忽略模型
+gguf/
+*.gguf
+
+# 忽略缓存
+build/
+.git/
+.gitignore
+__pycache__/

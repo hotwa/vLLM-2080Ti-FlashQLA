@@ -1,0 +1,41 @@
+# syntax=docker/dockerfile:1.7
+ARG CUDA_IMAGE=nvidia/cuda:12.8.0-devel-ubuntu22.04
+FROM ${CUDA_IMAGE}
+
+SHELL ["/bin/bash", "-lc"]
+ENV DEBIAN_FRONTEND=noninteractive \
+    PIP_DISABLE_PIP_VERSION_CHECK=1 \
+    PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    VIRTUAL_ENV=/opt/venv \
+    PATH="/opt/venv/bin:$PATH"
+
+ARG TORCH_CUDA_INDEX=https://download.pytorch.org/whl/cu128
+ARG TORCH_VER=2.9.1+cu128
+
+ARG TRANSFORMERS_VER=5.0.0
+
+ARG VLLM_VER=0.15.1
+ARG FLASHINFER_VER=0.6.2
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    python3 python3-venv python3-pip python3-dev \
+    build-essential git curl ca-certificates \
+    cmake ninja-build pkg-config \
+    ripgrep \
+    libxcb1 libx11-6 libxext6 libxrender1 libglib2.0-0 libgl1 \
+    && rm -rf /var/lib/apt/lists/*
+
+RUN python3 -m venv /opt/venv && \
+    pip install -U pip setuptools wheel packaging && \
+    pip install -U "vllm==${VLLM_VER}" && \
+    pip install -U \
+      "flashinfer-python==${FLASHINFER_VER}" \
+      "flashinfer-cubin==${FLASHINFER_VER}"  && \
+    pip install -U --pre "transformers==${TRANSFORMERS_VER}" && \
+    rm -rf /root/.cache/flashinfer && \
+    rm -rf /root/.cache/vllm && \
+    rm -rf /root/.cache/torch_extensions && \
+    rm -rf /tmp/torchinductor_root* /tmp/torchinductor_* 2>/dev/null || true
+
+CMD ["bash"]

@@ -1,0 +1,220 @@
+{%- set image_count = namespace(value=0) -%}
+{%- set video_count = namespace(value=0) -%}
+
+{%- macro render_content(content, do_vision_count=false, is_system_content=false) -%}
+    {%- if content is string -%}
+        {{- content -}}
+    {%- elif content is iterable and content is not mapping -%}
+        {%- for item in content -%}
+            {%- if item is mapping and ('image' in item or 'image_url' in item or item.type == 'image') -%}
+                {%- if is_system_content -%}
+                    {{- raise_exception('System/developer message cannot contain images.') -}}
+                {%- endif -%}
+                {%- if do_vision_count -%}
+                    {%- set image_count.value = image_count.value + 1 -%}
+                {%- endif -%}
+                {{- '<|vision_start|><|image_pad|><|vision_end|>' -}}
+            {%- elif item is mapping and ('video' in item or item.type == 'video') -%}
+                {%- if is_system_content -%}
+                    {{- raise_exception('System/developer message cannot contain videos.') -}}
+                {%- endif -%}
+                {%- if do_vision_count -%}
+                    {%- set video_count.value = video_count.value + 1 -%}
+                {%- endif -%}
+                {{- '<|vision_start|><|video_pad|><|vision_end|>' -}}
+            {%- elif item is mapping and 'text' in item -%}
+                {{- item.text -}}
+            {%- else -%}
+                {{- raise_exception('Unexpected item type in content.') -}}
+            {%- endif -%}
+        {%- endfor -%}
+    {%- elif content is none or content is undefined -%}
+        {{- '' -}}
+    {%- else -%}
+        {{- raise_exception('Unexpected content type.') -}}
+    {%- endif -%}
+{%- endmacro -%}
+
+{%- if not messages -%}
+    {{- raise_exception('No messages provided.') -}}
+{%- endif -%}
+
+{# ------------------------------------------------------------
+   Collect all system/developer messages and hoist them to the front.
+   This makes the template tolerant of OpenCode / Claude-style message layouts.
+   ------------------------------------------------------------ #}
+{%- set ns = namespace(hoisted_system='') -%}
+{%- for message in messages -%}
+    {%- if message.role == 'system' or message.role == 'developer' -%}
+        {%- set content = render_content(message.content, false, true) | trim -%}
+        {%- if content -%}
+            {%- if ns.hoisted_system -%}
+                {%- set ns.hoisted_system = ns.hoisted_system + '\n\n' + content -%}
+            {%- else -%}
+                {%- set ns.hoisted_system = content -%}
+            {%- endif -%}
+        {%- endif -%}
+    {%- endif -%}
+{%- endfor -%}
+
+{# ------------------------------------------------------------
+   Tool prelude: inject tool schema into the single hoisted system block.
+   ------------------------------------------------------------ #}
+{%- set ns2 = namespace(system_block=ns.hoisted_system) -%}
+{%- if tools and tools is iterable and tools is not mapping -%}
+    {%- set tool_prelude -%}
+# Tools
+
+You have access to the following functions:
+
+<tools>{%- for tool in tools %}
+{{ "\n" }}{{ tool | tojson }}{%- endfor %}
+</tools>
+
+When calling a function, you MUST follow these rules:
+
+1. Use ONLY the function names listed in <tools>.
+2. Use ONLY parameter names that exist in that function schema.
+3. Do NOT invent function names.
+4. Do NOT invent parameter names.
+5. Do NOT substitute placeholders such as "skill_name", "tool_name", "id", or similar unless they are explicitly required by the schema.
+6. If a parameter expects a numeric ID, return the numeric ID exactly.
+7. If you are not certain about the correct function or arguments, do NOT call a function; answer normally instead.
+
+If you choose to call a function, ONLY reply in the following format with NO suffix and NO extra text after the function call:
+
+<tool_call>
+<function=example_function_name>
+<parameter=example_parameter_1>
+value_1
+</parameter>
+<parameter=example_parameter_2>
+value_2
+</parameter>
+</function>
+</tool_call>
+
+<IMPORTANT>
+- Function calls MUST follow the specified format exactly.
+- Required parameters MUST be specified.
+- Optional natural language reasoning may appear BEFORE the function call, but NEVER after it.
+- If no valid function call is possible, answer normally.
+- Do NOT omit the initial <tool_call> tag.
+</IMPORTANT>
+    {%- endset -%}
+
+    {%- if ns2.system_block -%}
+        {%- set ns2.system_block = tool_prelude | trim + '\n\n' + ns2.system_block -%}
+    {%- else -%}
+        {%- set ns2.system_block = tool_prelude | trim -%}
+    {%- endif -%}
+{%- endif -%}
+
+{%- if ns2.system_block -%}
+<|im_start|>system
+{{ ns2.system_block | trim }}<|im_end|>
+
+{%- endif -%}
+
+{# ------------------------------------------------------------
+   Detect last real user query (ignore synthetic <tool_response> user wrappers)
+   ------------------------------------------------------------ #}
+{%- set flow = namespace(multi_step_tool=true, last_query_index=messages|length - 1) -%}
+{%- for message in messages[::-1] -%}
+    {%- set index = (messages|length - 1) - loop.index0 -%}
+    {%- if flow.multi_step_tool and message.role == "user" -%}
+        {%- set content = render_content(message.content, false) | trim -%}
+        {%- if not (content.startswith('<tool_response>') and content.endswith('</tool_response>')) -%}
+            {%- set flow.multi_step_tool = false -%}
+            {%- set flow.last_query_index = index -%}
+        {%- endif -%}
+    {%- endif -%}
+{%- endfor -%}
+{%- if flow.multi_step_tool -%}
+    {%- set flow.last_query_index = messages|length - 1 -%}
+{%- endif -%}
+
+{# ------------------------------------------------------------
+   Render conversation excluding system/developer because already hoisted
+   ------------------------------------------------------------ #}
+{%- for message in messages -%}
+    {%- if message.role == 'system' or message.role == 'developer' -%}
+        {# already hoisted; skip #}
+
+    {%- elif message.role == "user" -%}
+        {%- set content = render_content(message.content, true, false) | trim -%}
+<|im_start|>user
+{{ content }}<|im_end|>
+
+    {%- elif message.role == "assistant" -%}
+        {%- set content = render_content(message.content, true, false) | trim -%}
+        {%- set reasoning_content = '' -%}
+
+        {%- if message.reasoning_content is string -%}
+            {%- set reasoning_content = message.reasoning_content | trim -%}
+        {%- elif content and '<think>' in content and '</think>' in content -%}
+            {%- set reasoning_content = content.split('</think>')[0].split('<think>')[-1] | trim -%}
+            {%- set content = content.split('</think>')[-1] | trim -%}
+        {%- endif -%}
+
+<|im_start|>assistant
+{%- if reasoning_content and loop.index0 > flow.last_query_index %}
+<think>
+{{ reasoning_content }}
+</think>
+
+{%- endif -%}
+{{ content -}}
+        {%- if message.tool_calls and message.tool_calls is iterable and message.tool_calls is not mapping -%}
+            {%- for tool_call in message.tool_calls -%}
+                {%- if tool_call.function is defined -%}
+                    {%- set tool_call = tool_call.function -%}
+                {%- endif -%}
+
+{{ '\n\n<tool_call>\n<function=' + tool_call.name + '>\n' -}}
+                {%- if tool_call.arguments is defined -%}
+                    {%- if tool_call.arguments is mapping -%}
+                        {%- for args_name, args_value in tool_call.arguments.items() -%}
+<parameter={{ args_name }}>
+{%- if args_value is mapping or (args_value is sequence and args_value is not string) -%}
+{{ args_value | tojson }}
+{%- else -%}
+{{ args_value | string }}
+{%- endif -%}
+</parameter>
+                        {%- endfor -%}
+                    {%- else -%}
+                        {# Some gateways provide JSON string arguments; keep them as a single payload #}
+<parameter=arguments>
+{{ tool_call.arguments }}
+</parameter>
+                    {%- endif -%}
+                {%- endif -%}
+</function>
+</tool_call>
+            {%- endfor -%}
+        {%- endif -%}
+<|im_end|>
+
+    {%- elif message.role == "tool" -%}
+        {%- set content = render_content(message.content, true, false) | trim -%}
+        {%- if loop.previtem and loop.previtem.role != "tool" -%}
+<|im_start|>user
+        {%- endif -%}
+<tool_response>
+{{ content }}
+</tool_response>
+        {%- if not loop.last and loop.nextitem.role != "tool" -%}
+<|im_end|>
+        {%- elif loop.last -%}
+<|im_end|>
+        {%- endif -%}
+
+    {%- else -%}
+        {{- raise_exception('Unexpected message role: ' + message.role) -}}
+    {%- endif -%}
+{%- endfor -%}
+
+{%- if add_generation_prompt -%}
+<|im_start|>assistant
+{%- endif -%}

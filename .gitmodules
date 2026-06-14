@@ -1,0 +1,3 @@
+[submodule "FlashQLA-SM70-SM75"]
+	path = FlashQLA-SM70-SM75
+	url = https://github.com/weicj/FlashQLA-SM70-SM75.git

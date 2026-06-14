@@ -1,0 +1,130 @@
+services:
+  llama-server-gpu0:
+    image: hotwa/ik:latest
+    build:
+      context: .
+      dockerfile: docker/llama-server-cuda.Dockerfile
+    container_name: llama-server-gpu0
+    ports:
+      - "8081:8080"
+    shm_size: "2g"
+    volumes:
+      - ${MODEL_DIR:-./gguf}:/models:ro
+      - ./chat_template.jinja:/config/chat_template.jinja:ro
+    gpus:
+      - driver: nvidia
+        device_ids: ["0"]
+        capabilities: ["gpu"]
+    environment:
+      - NVIDIA_VISIBLE_DEVICES=0
+      - NVIDIA_DRIVER_CAPABILITIES=compute,utility
+    restart: unless-stopped
+    command:
+      - --model
+      - /models/${MODEL_FILE:-Qwen3.5-27B-IQ5_K.gguf}
+      - --alias
+      - Qwen3.5-27B
+      - --split-mode
+      - none
+      - -c
+      - "262144"
+      - -ctk
+      - q8_0
+      - -ger
+      - -mla
+      - "3"
+      - -amb
+      - "512"
+      - -ngl
+      - "99"
+      - -ub
+      - "1024"
+      - -b
+      - "8192"
+      - --threads
+      - "8"
+      - --host
+      - 0.0.0.0
+      - --port
+      - "8080"
+      - --jinja
+      - --chat-template-file
+      - /config/chat_template.jinja
+      - --reasoning-format
+      - none
+      - --reasoning-tokens
+      - none
+      - --no-mmap
+      - --verbose-prompt
+      - --log-format
+      - text
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+
+  llama-server-gpu1:
+    image: hotwa/ik:latest
+    build:
+      context: .
+      dockerfile: docker/llama-server-cuda.Dockerfile
+    container_name: llama-server-gpu1
+    ports:
+      - "8082:8080"
+    shm_size: "2g"
+    volumes:
+      - ${MODEL_DIR:-./gguf}:/models:ro
+      - ./chat_template.jinja:/config/chat_template.jinja:ro
+    gpus:
+      - driver: nvidia
+        device_ids: ["1"]
+        capabilities: ["gpu"]
+    environment:
+      - NVIDIA_VISIBLE_DEVICES=1
+      - NVIDIA_DRIVER_CAPABILITIES=compute,utility
+    restart: unless-stopped
+    command:
+      - --model
+      - /models/${MODEL_FILE:-Qwen3.5-27B-IQ5_K.gguf}
+      - --alias
+      - Qwen3.5-27B
+      - --split-mode
+      - none
+      - -c
+      - "262144"
+      - -ctk
+      - q8_0
+      - -ger
+      - -mla
+      - "3"
+      - -amb
+      - "512"
+      - -ngl
+      - "99"
+      - -ub
+      - "1024"
+      - -b
+      - "8192"
+      - --threads
+      - "8"
+      - --host
+      - 0.0.0.0
+      - --port
+      - "8080"
+      - --jinja
+      - --chat-template-file
+      - /config/chat_template.jinja
+      - --reasoning-format
+      - none
+      - --reasoning-tokens
+      - none
+      - --no-mmap
+      - --verbose-prompt
+      - --log-format
+      - text
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 5

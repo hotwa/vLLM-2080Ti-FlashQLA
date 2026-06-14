@@ -1,0 +1,100 @@
+version: "3.9"
+
+services:
+  glmserver:
+    build:
+      context: .
+      dockerfile: Dockerfile.night
+    image: hotwa/vllm:nightly
+    container_name: glmserver
+    ports:
+      - "8001:8000"
+    gpus: all
+    volumes:
+      - ~/.cache/huggingface:/root/.cache/huggingface
+    env_file:
+      - ./.env
+    command:
+      - "--model"
+      - "TheHouseOfTheDude/GLM-4.7-Flash_AWQ"
+      - "--revision"
+      - "W8A16_GS32"
+      - "--trust-remote-code"
+      - "--served-model-name"
+      - "glm-4.7-flash"
+      - "--dtype"
+      - "bfloat16"
+      - "--max-model-len"
+      - "65536"
+      - "--max-num-seqs"
+      - "1"
+      - "--gpu-memory-utilization"
+      - "0.95"
+      - "--tool-call-parser"
+      - "glm47"
+      - "--reasoning-parser"
+      - "glm45"
+      - "--enable-auto-tool-choice"
+      - "--distributed-executor-backend"
+      - "mp"
+      - "--host"
+      - "0.0.0.0"
+      - "--port"
+      - "8000"
+    environment:
+      - VLLM_ALLOW_LONG_MAX_MODEL_LEN=1
+      - HF_HUB_ENABLE_HF_TRANSFER=1
+      - VLLM_MLA_DISABLE=1
+      - VLLM_DISABLE_FLASH_ATTN=1
+      - VLLM_USE_FLASH_ATTN=0
+      - NCCL_P2P_DISABLE=1
+      - NCCL_IB_DISABLE=1
+      - NCCL_SHM_DISABLE=0
+      # - NCCL_DEBUG=INFO
+      - HF_ENDPOINT=https://hf-mirror.com
+      - HF_TOKEN={:-HF_TOKEN}
+    shm_size: "16gb"
+    ulimits:
+      memlock: -1
+      stack: 67108864
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://127.0.0.1:8000/ping >/dev/null"]
+      interval: 5s
+      timeout: 3s
+      retries: 240
+      start_period: 600s
+    networks:
+      - llmnet
+
+  litellm-router:
+    image: docker.litellm.ai/berriai/litellm:main-stable
+    container_name: litellm-router
+    ports:
+      - "4000:4000"
+    volumes:
+      - ./litellm-config.yaml:/app/config.yaml:ro
+    env_file:
+      - ./.env.litellm
+    environment:
+      # 通过 Docker DNS 访问 vLLM
+      - VLLM_API_BASE=http://glmserver:8000/v1
+      - LITELLM_DISABLE_STREAMING_LOGGING=true
+    command:
+      - "--config"
+      - "/app/config.yaml"
+      - "--host"
+      - "0.0.0.0"
+      - "--port"
+      - "4000"
+    depends_on:
+      glmserver:
+        condition: service_healthy
+    restart: unless-stopped
+    networks:
+      - llmnet
+
+networks:
+  llmnet:
+    driver: bridge
+

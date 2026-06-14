@@ -1,0 +1,2 @@
+profile,context_len,prompt_tokens,completion_tokens,total_tokens,ttft_s,prompt_processing_tok_s,decode_tok_s,peak_vram_mib,status,error
+long_context,131072,104263,30,104293,117.88065549300518,884.4793029352197,37.13253108926034,12301,ok,

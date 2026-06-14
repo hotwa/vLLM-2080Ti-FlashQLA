@@ -1,0 +1,178 @@
+services:
+  tools:
+    build:
+      context: .
+      dockerfile: build/Dockerfile
+      target: tools
+      args:
+        CUDA_VERSION: ${CUDA_VERSION:-12.8.1}
+        IK_LLAMA_REF: ${IK_LLAMA_REF:-64234e3c4ea9c3cd2dd1a4f84c7da38e9607c747}
+        CMAKE_CUDA_ARCHITECTURES: ${CMAKE_CUDA_ARCHITECTURES:-75}
+        TRANSFORMERS_VERSION: ${TRANSFORMERS_VERSION:-5.3.0}
+    image: copaw-ik-tools:${IK_LLAMA_REF:-64234e3c4ea9c3cd2dd1a4f84c7da38e9607c747}
+    container_name: copaw-ik-tools
+    profiles: ["tools"]
+    ipc: host
+    shm_size: "16g"
+    gpus: all
+    env_file:
+      - path: ./.env
+        required: false
+    environment:
+      BASE_MODEL_SOURCE: /source/CoPaw/models/base/CoPaw-Flash-9B
+      LORA_SOURCE: /source/CoPaw/models/lora/CoPaw-Flash-9B-DataAnalyst-LoRA
+      HF_TOKEN: ${HF_TOKEN:-}
+      HUGGING_FACE_HUB_TOKEN: ${HF_TOKEN:-}
+      HF_HOME: /root/.cache
+      HF_HUB_CACHE: /root/.cache/huggingface
+      TRANSFORMERS_CACHE: /root/.cache/huggingface
+      HF_HUB_ENABLE_HF_TRANSFER: ${HF_HUB_ENABLE_HF_TRANSFER:-1}
+      HF_HUB_DISABLE_XET: ${HF_HUB_DISABLE_XET:-1}
+      HF_HUB_DISABLE_TELEMETRY: "1"
+      CUDA_VISIBLE_DEVICES: ${CUDA_VISIBLE_DEVICES:-0,1}
+      NVIDIA_VISIBLE_DEVICES: ${CUDA_VISIBLE_DEVICES:-0,1}
+      NVIDIA_DRIVER_CAPABILITIES: compute,utility
+    volumes:
+      - ./hf-cache:/root/.cache
+      - ./models:/workspace/models
+      - ../CoPaw:/source/CoPaw
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 2
+              capabilities: [gpu]
+
+  server:
+    build:
+      context: .
+      dockerfile: build/Dockerfile
+      target: server
+      args:
+        CUDA_VERSION: ${CUDA_VERSION:-12.8.1}
+        IK_LLAMA_REF: ${IK_LLAMA_REF:-64234e3c4ea9c3cd2dd1a4f84c7da38e9607c747}
+        CMAKE_CUDA_ARCHITECTURES: ${CMAKE_CUDA_ARCHITECTURES:-75}
+        TRANSFORMERS_VERSION: ${TRANSFORMERS_VERSION:-5.3.0}
+    image: copaw-ik-server:${IK_LLAMA_REF:-64234e3c4ea9c3cd2dd1a4f84c7da38e9607c747}
+    container_name: copaw-ik-server
+    restart: unless-stopped
+    ipc: host
+    shm_size: "16g"
+    gpus: all
+    env_file:
+      - path: ./.env
+        required: false
+    environment:
+      BASE_MODEL_SOURCE: /source/CoPaw/models/base/CoPaw-Flash-9B
+      LORA_SOURCE: /source/CoPaw/models/lora/CoPaw-Flash-9B-DataAnalyst-LoRA
+      HF_TOKEN: ${HF_TOKEN:-}
+      HUGGING_FACE_HUB_TOKEN: ${HF_TOKEN:-}
+      HF_HOME: /root/.cache
+      HF_HUB_CACHE: /root/.cache/huggingface
+      TRANSFORMERS_CACHE: /root/.cache/huggingface
+      HF_HUB_ENABLE_HF_TRANSFER: ${HF_HUB_ENABLE_HF_TRANSFER:-1}
+      HF_HUB_DISABLE_XET: ${HF_HUB_DISABLE_XET:-1}
+      HF_HUB_DISABLE_TELEMETRY: "1"
+      CUDA_VISIBLE_DEVICES: ${CUDA_VISIBLE_DEVICES:-0,1}
+      NVIDIA_VISIBLE_DEVICES: ${CUDA_VISIBLE_DEVICES:-0,1}
+      NVIDIA_DRIVER_CAPABILITIES: compute,utility
+      MODEL_FILE: ${MODEL_FILE:-/workspace/models/gguf/CoPaw-Flash-9B-DataAnalyst-Merged-q5_k_m.gguf}
+      MODEL_NAME: ${MODEL_NAME:-CoPaw-Flash-9B-DataAnalyst-Merged}
+      CHAT_TEMPLATE_FILE: ${CHAT_TEMPLATE_FILE:-/workspace/models/merged/CoPaw-Flash-9B-DataAnalyst-Merged/chat_template.jinja}
+      MAX_MODEL_LEN: ${MAX_MODEL_LEN:-262144}
+      N_PARALLEL: ${N_PARALLEL:-2}
+      N_GPU_LAYERS: ${N_GPU_LAYERS:-999}
+      SPLIT_MODE: ${SPLIT_MODE:-layer}
+      TENSOR_SPLIT: ${TENSOR_SPLIT:-1,1}
+      CACHE_TYPE_K: ${CACHE_TYPE_K:-q8_0}
+      CACHE_TYPE_V: ${CACHE_TYPE_V:-q8_0}
+      REASONING_FORMAT: ${REASONING_FORMAT:-deepseek}
+      REASONING_BUDGET: ${REASONING_BUDGET:-0}
+      CHAT_TEMPLATE_ENABLE_THINKING: ${CHAT_TEMPLATE_ENABLE_THINKING:-0}
+      NO_CONTEXT_SHIFT: ${NO_CONTEXT_SHIFT:-1}
+      JINJA: ${JINJA:-1}
+      FLASH_ATTN: ${FLASH_ATTN:-1}
+    volumes:
+      - ./hf-cache:/root/.cache
+      - ./models:/workspace/models
+    ports:
+      - "${HOST_PORT:-8000}:8000"
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 2
+              capabilities: [gpu]
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://127.0.0.1:8000/v1/models >/dev/null"]
+      interval: 15s
+      timeout: 5s
+      retries: 20
+      start_period: 900s
+    command:
+      - bash
+      - -lc
+      - |
+        set -euo pipefail
+
+        gguf_basen="${GGUF_BASENAME:-CoPaw-Flash-9B-DataAnalyst-Merged}"
+        gguf_quant="${GGUF_QUANT:-Q5_K_M}"
+        gguf_quant_suffix="$(printf '%s' "$$gguf_quant" | tr '[:upper:]' '[:lower:]')"
+        model_file="${MODEL_FILE:-/workspace/models/gguf/$${gguf_basen}-$${gguf_quant_suffix}.gguf}"
+        model_name="${MODEL_NAME:-CoPaw-Flash-9B-DataAnalyst-Merged}"
+        chat_template_file="${CHAT_TEMPLATE_FILE:-/workspace/models/merged/CoPaw-Flash-9B-DataAnalyst-Merged/chat_template.jinja}"
+        ctx_size="${MAX_MODEL_LEN:-262144}"
+        n_parallel="${N_PARALLEL:-2}"
+        n_gpu_layers="${N_GPU_LAYERS:-999}"
+        split_mode="${SPLIT_MODE:-layer}"
+        tensor_split="${TENSOR_SPLIT:-1,1}"
+        cache_type_k="${CACHE_TYPE_K:-q8_0}"
+        cache_type_v="${CACHE_TYPE_V:-q8_0}"
+        reasoning_format="${REASONING_FORMAT:-deepseek}"
+        reasoning_budget="${REASONING_BUDGET:-0}"
+        chat_template_enable_thinking="${CHAT_TEMPLATE_ENABLE_THINKING:-0}"
+        cmd=(
+          llama-server
+          -m "$$model_file"
+          -a "$$model_name"
+          --host 0.0.0.0
+          --port 8000
+          -c "$$ctx_size"
+          -np "$$n_parallel"
+          -ngl "$$n_gpu_layers"
+          -sm "$$split_mode"
+          -ts "$$tensor_split"
+          --cache-type-k "$$cache_type_k"
+          --cache-type-v "$$cache_type_v"
+          --reasoning-format "$$reasoning_format"
+          --reasoning-budget "$$reasoning_budget"
+          --chat-template-kwargs '{"enable_thinking": '"$( [ "$$chat_template_enable_thinking" = "0" ] && printf false || printf true )"'}'
+        )
+
+        if [ ! -f "$$model_file" ]; then
+          echo "Missing model file: $$model_file" >&2
+          echo "Run ./scripts/merge_lora.sh and ./scripts/convert_to_gguf.sh first." >&2
+          exit 1
+        fi
+
+        if [ ! -f "$$chat_template_file" ]; then
+          echo "Missing chat template: $$chat_template_file" >&2
+          echo "The merged model directory should contain chat_template.jinja." >&2
+          exit 1
+        fi
+
+        if [ "$${FLASH_ATTN:-1}" = "1" ]; then
+          cmd+=(--flash-attn on)
+        fi
+
+        if [ "$${JINJA:-1}" = "1" ]; then
+          cmd+=(--jinja --chat-template-file "$$chat_template_file")
+        fi
+
+        if [ "$${NO_CONTEXT_SHIFT:-1}" = "1" ]; then
+          cmd+=(--no-context-shift)
+        fi
+
+        exec "$${cmd[@]}"

@@ -1,0 +1,46 @@
+services:
+  vllm:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: hotwa/vllm-2080ti-flashqla:latest
+    container_name: vllm-2080ti
+    restart: unless-stopped
+    shm_size: "8g"
+    ports:
+      - "8000:8000"
+    volumes:
+      - /data/models:/models:ro
+      # Persist JIT-compiled kernel caches across restarts
+      - vllm-torch-cache:/tmp/torch_extensions_cache
+      - vllm-triton-cache:/tmp/triton-cache
+      - vllm-inductor-cache:/tmp/torchinductor-cache
+    environment:
+      - NVIDIA_VISIBLE_DEVICES=all
+      - MODEL_DIR=/models/Qwen3.6-27B-GPTQ-Int4
+      - PORT=8000
+      # SM75 runtime
+      - TORCH_CUDA_ARCH_LIST=7.5
+      - CUDA_DEVICE_ORDER=PCI_BUS_ID
+      - FLASHINFER_ENABLE_AOT=1
+      # Fast mode
+      - VLLM_SM75_SPEC_SYNC_MODE=nosync
+      - VLLM_ALLOW_MAMBA_SPEC_FULL_CUDAGRAPH=1
+      - DISABLE_LOG_STATS=1
+      # INT8 KV cache
+      - VLLM_INT8KV_FA_PREFILL=1
+      - VLLM_INT8KV_FA_CONTINUATION_DEQUANT=1
+      - VLLM_INT8KV_FA_CASCADE_DEQUANT=1
+      - VLLM_INT8KV_FA_CASCADE_TILE_TOKENS=65536
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 2
+              capabilities: [gpu]
+
+volumes:
+  vllm-torch-cache:
+  vllm-triton-cache:
+  vllm-inductor-cache:

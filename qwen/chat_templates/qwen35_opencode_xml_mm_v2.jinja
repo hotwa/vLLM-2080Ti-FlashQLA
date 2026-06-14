@@ -1,0 +1,292 @@
+{%- set image_count = namespace(value=0) -%}
+{%- set video_count = namespace(value=0) -%}
+
+{%- macro safe_text(value) -%}
+    {%- if value is string -%}
+        {{- value -}}
+    {%- elif value is number -%}
+        {{- value | string -}}
+    {%- elif value is boolean -%}
+        {{- value | string -}}
+    {%- elif value is none or value is undefined -%}
+        {{- '' -}}
+    {%- elif value is mapping -%}
+        {%- if value.text is defined and value.text is not none -%}
+            {{- value.text | string -}}
+        {%- elif value.content is defined and value.content is not none -%}
+            {{- safe_text(value.content) -}}
+        {%- else -%}
+            {{- value | tojson -}}
+        {%- endif -%}
+    {%- elif value is iterable -%}
+        {{- value | tojson -}}
+    {%- else -%}
+        {{- value | string -}}
+    {%- endif -%}
+{%- endmacro -%}
+
+{%- macro render_content(content, do_vision_count=false, is_system_content=false) -%}
+    {%- if content is string -%}
+        {{- content -}}
+
+    {%- elif content is none or content is undefined -%}
+        {{- '' -}}
+
+    {%- elif content is mapping -%}
+        {# Graceful fallback for proxy-mutated payloads #}
+        {%- if content.text is defined and content.text is not none -%}
+            {{- content.text | string -}}
+        {%- elif content.content is defined and content.content is not none -%}
+            {{- safe_text(content.content) -}}
+        {%- else -%}
+            {{- content | tojson -}}
+        {%- endif -%}
+
+    {%- elif content is iterable and content is not mapping -%}
+        {%- for item in content -%}
+            {%- if item is string -%}
+                {{- item -}}
+
+            {%- elif item is mapping -%}
+                {%- set item_type = item.type if item.type is defined else none -%}
+
+                {# image-like blocks #}
+                {%- if ('image' in item) or ('image_url' in item) or item_type == 'image' or item_type == 'input_image' -%}
+                    {%- if not is_system_content -%}
+                        {%- if do_vision_count -%}
+                            {%- set image_count.value = image_count.value + 1 -%}
+                        {%- endif -%}
+                        {{- '<|vision_start|><|image_pad|><|vision_end|>' -}}
+                    {%- endif -%}
+
+                {# video-like blocks #}
+                {%- elif ('video' in item) or item_type == 'video' or item_type == 'input_video' -%}
+                    {%- if not is_system_content -%}
+                        {%- if do_vision_count -%}
+                            {%- set video_count.value = video_count.value + 1 -%}
+                        {%- endif -%}
+                        {{- '<|vision_start|><|video_pad|><|vision_end|>' -}}
+                    {%- endif -%}
+
+                {# common text-ish blocks from OpenAI-compatible / proxy-mutated payloads #}
+                {%- elif item.text is defined and item.text is not none -%}
+                    {{- item.text | string -}}
+                {%- elif item.content is defined and item.content is not none -%}
+                    {{- safe_text(item.content) -}}
+                {%- elif item.input_text is defined and item.input_text is not none -%}
+                    {{- item.input_text | string -}}
+                {%- elif item_type == 'text' and item.text is defined and item.text is not none -%}
+                    {{- item.text | string -}}
+                {%- elif item_type == 'output_text' and item.text is defined and item.text is not none -%}
+                    {{- item.text | string -}}
+
+                {# unknown / injected item types: silently ignore #}
+                {%- else -%}
+                    {{- '' -}}
+                {%- endif -%}
+
+            {%- else -%}
+                {{- safe_text(item) -}}
+            {%- endif -%}
+        {%- endfor -%}
+
+    {%- else -%}
+        {{- safe_text(content) -}}
+    {%- endif -%}
+{%- endmacro -%}
+
+{%- macro render_tool_call_xml(tc) -%}
+    {%- if tc.function is defined -%}
+        {%- set fn = tc.function -%}
+    {%- else -%}
+        {%- set fn = tc -%}
+    {%- endif -%}
+<tool_call>
+<function={{ fn.name if fn.name is defined else 'unknown_tool' }}>
+{%- if fn.arguments is mapping -%}
+    {%- for k, v in fn.arguments.items() -%}
+<parameter={{ k }}>
+{%- if v is mapping or (v is sequence and v is not string) -%}
+{{ v | tojson }}
+{%- else -%}
+{{ v | string }}
+{%- endif -%}
+</parameter>
+    {%- endfor -%}
+{%- elif fn.arguments is string -%}
+<parameter=arguments>
+{{ fn.arguments }}
+</parameter>
+{%- elif fn.arguments is defined and fn.arguments is not none -%}
+<parameter=arguments>
+{{ fn.arguments | tojson }}
+</parameter>
+{%- endif -%}
+</function>
+</tool_call>
+{%- endmacro -%}
+
+{%- if not messages or messages | length == 0 -%}
+{{- raise_exception('No messages provided.') -}}
+{%- endif -%}
+
+{# Hoist system/developer messages to the front #}
+{%- set ns = namespace(system_parts=[]) -%}
+{%- for message in messages -%}
+    {%- if message.role == 'system' or message.role == 'developer' -%}
+        {%- set part = render_content(message.content, false, true) | trim -%}
+        {%- if part -%}
+            {%- set ns.system_parts = ns.system_parts + [part] -%}
+        {%- endif -%}
+    {%- endif -%}
+{%- endfor -%}
+
+{%- set protocol_block -%}
+You are a coding and multimodal assistant for OpenCode-style agent workflows.
+
+CRITICAL OUTPUT RULES:
+
+1. Never reveal hidden reasoning, chain-of-thought, or internal analysis to the user, except that you may use <think>...</think> privately in the assistant output before a tool call or before a final answer when the serving stack supports reasoning parsing.
+2. Never output <tool_code>.
+3. If tools are available, use ONLY the tools listed in <tools>.
+4. You MAY think first using <think>...</think>.
+5. If you decide to call a tool, after any optional <think>...</think> block, the remainder of your reply must contain ONLY XML tool-call blocks in exactly this form:
+
+<tool_call>
+<function=TOOL_NAME>
+<parameter=ARG_NAME>
+ARG_VALUE
+</parameter>
+</function>
+</tool_call>
+
+6. Once you start emitting a <tool_call> block, do not output any explanatory text, markdown fence, or commentary before, between, or after tool-call XML blocks, except that multiple <tool_call> blocks must be separated by a blank line.
+7. Do not output JSON tool calls.
+8. If multiple tool calls are needed, output multiple <tool_call> blocks consecutively, separated by exactly one blank line.
+9. If no tool is needed, answer normally in plain text.
+10. For the bash tool, always provide BOTH:
+    - <parameter=command>
+    - <parameter=description>
+11. The description must briefly explain the purpose of the command.
+12. For image or video understanding requests, answer directly from the visual input when no tool is needed.
+13. After receiving tool results, continue the task and provide the final answer unless another tool is required.
+14. Do not stop after a reasoning block. Always either call a tool or provide a final answer.
+15. Do not emit standalone <think> or <thinking> blocks as the final response.
+16. Arguments may be provided either as structured parameters or as a single JSON string wrapped inside:
+<parameter=arguments>
+{"key":"value"}
+</parameter>
+Both forms are valid.
+17. If a tool call is produced, ensure the XML is well-formed and complete.
+18. If multiple tools are called in parallel, separate each <tool_call> block with one blank line.
+
+{%- if tools and tools is iterable and tools is not mapping %}
+
+# Tools
+
+You have access to the following functions:
+
+<tools>
+{%- for tool in tools %}
+{{ tool | tojson }}
+{%- endfor %}
+</tools>
+{%- endif %}
+{%- endset -%}
+
+{%- set merged_system = (ns.system_parts | join('\n\n')) | trim -%}
+{%- if merged_system -%}
+    {%- set merged_system = protocol_block | trim + '\n\n' + merged_system -%}
+{%- else -%}
+    {%- set merged_system = protocol_block | trim -%}
+{%- endif -%}
+
+<|im_start|>system
+{{ merged_system }}
+<|im_end|>
+
+{%- set body = namespace(count=0) -%}
+{%- for message in messages -%}
+    {%- set role = message.role if message.role is defined else 'user' -%}
+
+    {%- if role == 'system' or role == 'developer' -%}
+        {# already hoisted #}
+
+    {%- elif role == 'user' -%}
+        {%- set content = render_content(message.content, true, false) | trim -%}
+        {%- if content -%}
+<|im_start|>user
+{{ content }}
+<|im_end|>
+            {%- set body.count = body.count + 1 -%}
+        {%- endif -%}
+
+    {%- elif role == 'assistant' -%}
+        {#
+           WARNING:
+           Do NOT attempt to strip <think>...</think> blocks in Jinja.
+           Jinja cannot safely do regex-style block removal.
+           Reasoning cleanup MUST be done upstream in the Python proxy layer
+           before appending assistant content back into conversation history.
+        #}
+        {%- set content = render_content(message.content, true, false) | trim -%}
+        {%- set has_tool_calls = message.tool_calls is defined and message.tool_calls and message.tool_calls is iterable and message.tool_calls is not mapping -%}
+        {%- if content or has_tool_calls -%}
+<|im_start|>assistant
+{%- if content -%}
+{{ content }}
+{%- endif -%}
+{%- if has_tool_calls -%}
+    {%- if content %}
+
+    {%- endif -%}
+    {%- for tc in message.tool_calls -%}
+{{ render_tool_call_xml(tc) }}
+        {%- if not loop.last %}
+
+
+        {%- endif -%}
+    {%- endfor -%}
+{%- endif -%}
+<|im_end|>
+            {%- set body.count = body.count + 1 -%}
+        {%- endif -%}
+
+    {%- elif role == 'tool' -%}
+        {%- set content = render_content(message.content, true, false) | trim -%}
+        {%- if content -%}
+            {%- if loop.first or messages[loop.index0 - 1].role != 'tool' -%}
+<|im_start|>user
+            {%- endif -%}
+<tool_response>
+{%- if content | length > 10000 -%}
+{{ content[:10000] }}...[Truncated]
+{%- else -%}
+{{ content }}
+{%- endif -%}
+</tool_response>
+            {%- if loop.last or messages[loop.index0 + 1].role != 'tool' -%}
+<|im_end|>
+            {%- endif -%}
+            {%- set body.count = body.count + 1 -%}
+        {%- endif -%}
+
+    {%- else -%}
+        {# Graceful fallback for unknown roles injected by proxies/agents #}
+        {%- set content = render_content(message.content, true, false) | trim -%}
+        {%- if content -%}
+<|im_start|>user
+{{ content }}
+<|im_end|>
+            {%- set body.count = body.count + 1 -%}
+        {%- endif -%}
+    {%- endif -%}
+{%- endfor -%}
+
+{%- if body.count == 0 -%}
+{{- raise_exception('Rendered prompt body is empty.') -}}
+{%- endif -%}
+
+{%- if add_generation_prompt -%}
+<|im_start|>assistant
+{%- endif -%}

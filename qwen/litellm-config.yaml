@@ -1,0 +1,62 @@
+general_settings:
+  health_check_details: false
+  disable_anthropic_experimental_pass_through: true
+
+litellm_settings:
+  master_key: os.environ/LITELLM_MASTER_KEY
+  drop_params: true
+  disable_streaming_logging: true
+
+router_settings:
+  routing_strategy: least-busy
+  num_retries: 2
+  timeout: 180
+
+model_list:
+  # ============================================
+  # Roo Code 主模型：Claude-3-5-Sonnet
+  # vLLM 后端 (NVFP4-MTP)，支持 tools/function calling
+  # vLLM 配置: --max-num-seqs 2 (支持2并发)
+  # ============================================
+  - model_name: claude-3-5-sonnet
+    litellm_params:
+      model: openai/qwen3.5-27b-nvfp4
+      api_base: http://qwenserver:8000/v1
+      api_key: anything
+      timeout: 600
+      drop_params: true
+    model_info:
+      id: qwen3.5-27b-nvfp4
+      max_input_tokens: 120000
+      max_tokens: 131072
+      supports_vision: false
+      supports_function_calling: true
+      supports_tool_choice: true
+      supports_prompt_caching: false
+      supports_response_schema: true
+      supports_system_messages: true
+      input_cost_per_token: 0.000003
+      output_cost_per_token: 0.000015
+
+  # ============================================
+  # 备用模型名：直接使用模型名
+  # ============================================
+  - model_name: qwen3.5-27b-nvfp4
+    litellm_params:
+      model: openai/qwen3.5-27b-nvfp4
+      api_base: http://qwenserver:8000/v1
+      api_key: anything
+      timeout: 600
+      drop_params: true
+    model_info:
+      id: qwen3.5-27b-nvfp4-alt
+      max_input_tokens: 120000
+      max_tokens: 131072
+      supports_vision: false
+      supports_function_calling: true
+      supports_tool_choice: true
+      supports_prompt_caching: false
+      supports_response_schema: true
+      supports_system_messages: true
+      input_cost_per_token: 0.000003
+      output_cost_per_token: 0.000015
