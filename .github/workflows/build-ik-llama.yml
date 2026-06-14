@@ -1,25 +1,39 @@
-name: Build and Push ik_llama.cpp Docker Image
+name: Build ik_llama.cpp SM75 Image
 
 on:
-  push:
-    branches:
-      - main
-    paths:
-      - 'qwen/build/ik_llama_main_262k/**'
-      - '.github/workflows/build-ik-llama.yml'
   workflow_dispatch:
+    inputs:
+      ik_ref:
+        description: 'ik_llama.cpp git ref (branch/tag/commit). Leave empty for latest main'
+        required: false
+        default: ''
+  schedule:
+    # Weekly build every Sunday at 02:00 UTC to track latest ik_llama.cpp
+    - cron: '0 2 * * 0'
 
 env:
   CONTEXT_PATH: qwen/build/ik_llama_main_262k
+  IMAGE_NAME: ${{ secrets.DOCKERHUB_USERNAME }}/ik-llama-cpp-sm75
 
 jobs:
   build-and-push:
     runs-on: ubuntu-latest
-    timeout-minutes: 60
+    timeout-minutes: 90
 
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+
+      - name: Determine ik_llama.cpp ref
+        id: ref
+        run: |
+          if [ -n "${{ github.event.inputs.ik_ref }}" ]; then
+            echo "ref=${{ github.event.inputs.ik_ref }}" >> $GITHUB_OUTPUT
+            echo "source=manual" >> $GITHUB_OUTPUT
+          else
+            echo "ref=main" >> $GITHUB_OUTPUT
+            echo "source=latest" >> $GITHUB_OUTPUT
+          fi
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
@@ -30,36 +44,45 @@ jobs:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
-      - name: Extract metadata
-        id: meta
-        uses: docker/metadata-action@v5
-        with:
-          images: ${{ secrets.DOCKERHUB_USERNAME }}/ik-llama-cpp
-          tags: |
-            type=raw,value=latest
-            type=raw,value=qwen36-main-262k-cuda
-            type=sha,prefix=
+      - name: Generate dynamic tags
+        id: tags
+        run: |
+          DATE_TAG=$(date +%Y%m%d)
+          SHORT_SHA=$(echo "${{ github.sha }}" | cut -c1-7)
+
+          # Build tag list
+          TAGS="${{ env.IMAGE_NAME }}:latest"
+          TAGS="${TAGS},${{ env.IMAGE_NAME }}:sm75"
+          TAGS="${TAGS},${{ env.IMAGE_NAME }}:sm75-${DATE_TAG}"
+          TAGS="${TAGS},${{ env.IMAGE_NAME }}:build-${SHORT_SHA}"
+
+          echo "tags=${TAGS}" >> $GITHUB_OUTPUT
+          echo "date=${DATE_TAG}" >> $GITHUB_OUTPUT
 
       - name: Build and push Docker image
         uses: docker/build-push-action@v5
         with:
           context: ${{ env.CONTEXT_PATH }}
           push: true
-          tags: ${{ steps.meta.outputs.tags }}
-          labels: ${{ steps.meta.outputs.labels }}
+          tags: ${{ steps.tags.outputs.tags }}
+          build-args: |
+            IK_LLAMA_CPP_REF=${{ steps.ref.outputs.ref }}
+            CUDA_ARCHITECTURES=75
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
       - name: Generate build summary
         run: |
-          echo "## 🐳 Docker Image Build Summary" >> $GITHUB_STEP_SUMMARY
+          echo "## ik_llama.cpp SM75 Build Summary" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "**Image:** ${{ secrets.DOCKERHUB_USERNAME }}/ik-llama-cpp" >> $GITHUB_STEP_SUMMARY
+          echo "**Image:** ${{ env.IMAGE_NAME }}" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "**Tags:**" >> $GITHUB_STEP_SUMMARY
           echo "- \`latest\`" >> $GITHUB_STEP_SUMMARY
-          echo "- \`qwen36-main-262k-cuda\`" >> $GITHUB_STEP_SUMMARY
-          echo "- \`${{ github.sha }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "- \`sm75\`" >> $GITHUB_STEP_SUMMARY
+          echo "- \`sm75-${{ steps.tags.outputs.date }}\`" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**ik_llama.cpp ref:** \`${{ steps.ref.outputs.ref }}\` (${{ steps.ref.outputs.source }})" >> $GITHUB_STEP_SUMMARY
+          echo "**CUDA Architecture:** SM75 (RTX 2080 Ti)" >> $GITHUB_STEP_SUMMARY
           echo "**Triggered by:** ${{ github.event_name }}" >> $GITHUB_STEP_SUMMARY
           echo "**Commit:** ${{ github.sha }}" >> $GITHUB_STEP_SUMMARY

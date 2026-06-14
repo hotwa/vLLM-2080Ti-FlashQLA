@@ -1,7 +1,7 @@
 FROM nvidia/cuda:13.0.1-devel-ubuntu24.04
 
 ARG IK_LLAMA_CPP_REPO=https://github.com/ikawrakow/ik_llama.cpp.git
-ARG IK_LLAMA_CPP_REF=0ab9bdf793772952a24c1a819433c90d5aa32aca
+ARG IK_LLAMA_CPP_REF=main
 ARG CUDA_ARCHITECTURES=75
 
 ENV DEBIAN_FRONTEND=noninteractive

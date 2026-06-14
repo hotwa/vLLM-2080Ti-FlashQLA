@@ -7,7 +7,7 @@ __pycache__/
 .venv/
 env/
 venv/
-build/
+/build/
 dist/
 wheels/
 .deps/

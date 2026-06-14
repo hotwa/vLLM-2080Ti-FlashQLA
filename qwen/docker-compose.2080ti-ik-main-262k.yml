@@ -3,7 +3,7 @@ services:
     build:
       context: ./build/ik_llama_main_262k
       dockerfile: Dockerfile
-    image: local/ik-llama-cpp:qwen36-main-262k-cuda
+    image: ${IK_LLAMA_IMAGE:-local/ik-llama-cpp-sm75:latest}
     container_name: qwen36-27b-ik-main-262k
     restart: unless-stopped
     ipc: host
