@@ -46,8 +46,8 @@ RUN uv venv --python 3.11 /build/.venv
 ENV PATH="/build/.venv/bin:${PATH}"
 
 RUN uv pip install -U pip setuptools wheel
-RUN uv pip install -r requirements/build/cuda.txt --torch-backend=auto
-RUN uv pip install -r requirements/cuda.txt --torch-backend=auto
+RUN uv pip install -r requirements/build/cuda.txt --torch-backend=cu128
+RUN uv pip install -r requirements/cuda.txt --torch-backend=cu128
 
 # Build vLLM (editable install so __file__ resolves correctly)
 # SETUPTOOLS_SCM_PRETEND_VERSION needed because .git is excluded by .dockerignore
