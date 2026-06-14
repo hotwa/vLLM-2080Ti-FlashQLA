@@ -61,20 +61,22 @@ RUN SITE=$(/build/.venv/bin/python -c "import site; print(site.getsitepackages()
     done
 
 # --------------- Runtime stage ---------------
-FROM nvidia/cuda:12.8.1-runtime-ubuntu24.04 AS runtime
+# Use devel image to include nvcc for FlashInfer runtime compilation
+FROM nvidia/cuda:12.8.1-devel-ubuntu24.04 AS runtime
 
 ENV DEBIAN_FRONTEND=noninteractive
 ENV CUDA_HOME=/usr/local/cuda
 ENV CUDA_PATH=/usr/local/cuda
+ENV CUDACXX=/usr/local/cuda/bin/nvcc
 ENV PATH="/usr/local/cuda/bin:${PATH}"
 
-# Install minimal runtime dependencies (Python 3.11 via deadsnakes PPA)
+# Install runtime dependencies (Python 3.11 via deadsnakes PPA)
 RUN apt-get update && apt-get install -y --no-install-recommends \
         software-properties-common \
     && add-apt-repository ppa:deadsnakes/ppa -y \
     && apt-get update && apt-get install -y --no-install-recommends \
         python3.11 python3.11-venv libpython3.11 \
-        curl \
+        curl build-essential ninja-build \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy Python environment (with fixed editable paths)
