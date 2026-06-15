@@ -71,6 +71,8 @@ else
         --language-model-only \
         --skip-mm-profiling \
         --chat-template /opt/vllm/docker/chat_template_no_thinking.jinja \
+        --enable-auto-tool-choice \
+        --tool-call-parser hermes \
         --speculative-config '{"method":"mtp","num_speculative_tokens":3}' \
         --compilation-config '{"cudagraph_capture_sizes":[4],"max_cudagraph_capture_size":4}'
 fi
