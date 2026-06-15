@@ -90,7 +90,7 @@ COPY --from=builder /build/.venv /opt/venv
 ENV PATH="/opt/venv/bin:${PATH}"
 
 # Fix prometheus_fastapi_instrumentator compatibility issue
-RUN pip install --no-cache-dir prometheus_fastapi_instrumentator==7.0.0
+RUN /opt/venv/bin/pip install --no-cache-dir prometheus_fastapi_instrumentator==7.0.0
 
 # Copy only necessary source files (not build cache)
 COPY --from=builder /build/vllm /opt/vllm/vllm
