@@ -93,7 +93,8 @@ COPY --from=builder /build/FlashQLA-SM70-SM75 /opt/vllm/FlashQLA-SM70-SM75
 COPY --from=builder /build/setup.py /opt/vllm/
 COPY --from=builder /build/pyproject.toml /opt/vllm/
 COPY --from=builder /build/CMakeLists.txt /opt/vllm/
-COPY --from=builder /build/docker/docker-entrypoint.sh /opt/vllm/docker/docker-entrypoint.sh
+COPY docker/docker-entrypoint.sh /opt/vllm/docker/docker-entrypoint.sh
+COPY docker/chat_template_no_thinking.jinja /opt/vllm/docker/chat_template_no_thinking.jinja
 
 WORKDIR /opt/vllm
 

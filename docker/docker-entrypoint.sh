@@ -22,11 +22,8 @@ export VLLM_SM75_SPEC_SYNC_MODE="${VLLM_SM75_SPEC_SYNC_MODE:-nosync}"
 export VLLM_ALLOW_MAMBA_SPEC_FULL_CUDAGRAPH="${VLLM_ALLOW_MAMBA_SPEC_FULL_CUDAGRAPH:-1}"
 export DISABLE_LOG_STATS="${DISABLE_LOG_STATS:-1}"
 
-# INT8 KV Cache Environment
-export VLLM_INT8KV_FA_PREFILL="${VLLM_INT8KV_FA_PREFILL:-1}"
-export VLLM_INT8KV_FA_CONTINUATION_DEQUANT="${VLLM_INT8KV_FA_CONTINUATION_DEQUANT:-1}"
-export VLLM_INT8KV_FA_CASCADE_DEQUANT="${VLLM_INT8KV_FA_CASCADE_DEQUANT:-1}"
-export VLLM_INT8KV_FA_CASCADE_TILE_TOKENS="${VLLM_INT8KV_FA_CASCADE_TILE_TOKENS:-65536}"
+# MTP BF16 Draft (for Qwen3.5/3.6 MTP)
+export VLLM_QWOPUS_MTP_BF16_DRAFT="${VLLM_QWOPUS_MTP_BF16_DRAFT:-1}"
 
 # Model configuration (can be overridden via environment)
 MODEL_DIR="${MODEL_DIR:-/models}"
@@ -60,21 +57,20 @@ else
         --host 0.0.0.0 \
         --port "$PORT" \
         --model "$MODEL_DIR" \
-        --served-model-name qwen27b-int4-int8kv-256K-mtp3-text-only-cu128 \
+        --served-model-name qwen27b-int4-mtp3 \
         --dtype half \
         --tensor-parallel-size 2 \
         --generation-config vllm \
         --gpu-memory-utilization 0.90 \
-        --max-model-len 262144 \
+        --max-model-len 256000 \
         --enable-chunked-prefill \
         --max-num-seqs 1 \
         --max-num-batched-tokens 2048 \
         --quantization gptq_marlin \
-        --kv-cache-dtype int8_per_token_head \
         --disable-custom-all-reduce \
         --language-model-only \
         --skip-mm-profiling \
-        --additional-config '{"gdn_prefill_backend":"flashqla_legacy","disable_custom_all_reduce":true}' \
+        --chat-template /opt/vllm/docker/chat_template_no_thinking.jinja \
         --speculative-config '{"method":"mtp","num_speculative_tokens":3}' \
         --compilation-config '{"cudagraph_capture_sizes":[4],"max_cudagraph_capture_size":4}'
 fi

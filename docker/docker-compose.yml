@@ -1,10 +1,10 @@
-# Pre-built images from Docker Hub - use with: docker-compose up -d
+# Pre-built images from Docker Hub - use with: docker compose -f docker/docker-compose.yml up -d
 # Both images are built by GitHub Actions
 
 services:
   # ik_llama.cpp service for Qwen3.6-27B (SM75 optimized, 262K context)
   qwen36-ik:
-    image: hotwa/ik-llama-cpp-sm75:latest
+    image: ${IK_IMAGE:-local/ik-llama-cpp:qwen36-main-262k-cuda}
     container_name: qwen36-27b-ik
     restart: unless-stopped
     ipc: host
@@ -12,8 +12,8 @@ services:
     ports:
       - "${QWEN_IK_HOST_PORT:-8080}:8080"
     volumes:
-      - ./models:/models
-      - ./.hf-cache:/root/.cache/huggingface
+      - ../qwen/models:/models
+      - ../.hf-cache:/root/.cache/huggingface
     environment:
       HF_HOME: /root/.cache/huggingface
       HF_ENDPOINT: ${HF_ENDPOINT:-https://hf-mirror.com}
@@ -55,22 +55,26 @@ services:
       retries: 30
       start_period: 300s
 
-  # vLLM FlashQLA service (GPTQ-Int4 quantized)
+  # vLLM FlashQLA service (GPTQ-Int4, FP16 KV, MTP3)
   vllm:
-    image: hotwa/vllm-2080ti-flashqla:latest
+    image: hotwa/vllm-2080ti-flashqla:main
     container_name: vllm-2080ti
     restart: unless-stopped
     shm_size: "8g"
     ports:
       - "${VLLM_HOST_PORT:-8000}:8000"
     volumes:
-      - ./models:/models:ro
+      - /data/models:/models:ro
       - vllm-torch-cache:/tmp/torch_extensions_cache
       - vllm-triton-cache:/tmp/triton-cache
       - vllm-inductor-cache:/tmp/torchinductor-cache
     environment:
       - NVIDIA_VISIBLE_DEVICES=all
       - MODEL_DIR=/models/Qwen3.6-27B-GPTQ-Int4
+      - NCCL_P2P_DISABLE=0
+      - NCCL_SHM_DISABLE=0
+      - NCCL_IB_DISABLE=1
+      - VLLM_DISABLE_SYMM_MEM=1
       - PORT=8000
       - TORCH_CUDA_ARCH_LIST=7.5
       - CUDA_DEVICE_ORDER=PCI_BUS_ID
@@ -78,10 +82,7 @@ services:
       - VLLM_SM75_SPEC_SYNC_MODE=nosync
       - VLLM_ALLOW_MAMBA_SPEC_FULL_CUDAGRAPH=1
       - DISABLE_LOG_STATS=1
-      - VLLM_INT8KV_FA_PREFILL=1
-      - VLLM_INT8KV_FA_CONTINUATION_DEQUANT=1
-      - VLLM_INT8KV_FA_CASCADE_DEQUANT=1
-      - VLLM_INT8KV_FA_CASCADE_TILE_TOKENS=65536
+      - VLLM_QWOPUS_MTP_BF16_DRAFT=1
     deploy:
       resources:
         reservations:
