@@ -64,12 +64,13 @@ RUN SITE=$(/build/.venv/bin/python -c "import site; print(site.getsitepackages()
     done
 
 # --------------- Runtime stage ---------------
-# Use runtime image (smaller than devel, nvcc not needed at runtime)
-FROM nvidia/cuda:12.8.1-runtime-ubuntu24.04 AS runtime
+# Must use devel image for FlashQLA CUDA kernel compilation (requires nvcc)
+FROM nvidia/cuda:12.8.1-devel-ubuntu24.04 AS runtime
 
 ENV DEBIAN_FRONTEND=noninteractive
 ENV CUDA_HOME=/usr/local/cuda
 ENV CUDA_PATH=/usr/local/cuda
+ENV CUDACXX=/usr/local/cuda/bin/nvcc
 ENV PATH="/usr/local/cuda/bin:${PATH}"
 
 # Install runtime dependencies (Python 3.11 via deadsnakes PPA)
@@ -78,7 +79,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && add-apt-repository ppa:deadsnakes/ppa -y \
     && apt-get update && apt-get install -y --no-install-recommends \
         python3.11 python3.11-venv libpython3.11 \
-        curl \
+        curl build-essential ninja-build \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy Python environment (with fixed editable paths)
