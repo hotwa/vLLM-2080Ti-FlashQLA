@@ -74,11 +74,12 @@ ENV CUDACXX=/usr/local/cuda/bin/nvcc
 ENV PATH="/usr/local/cuda/bin:${PATH}"
 
 # Install runtime dependencies (Python 3.11 via deadsnakes PPA)
+# python3.11-dev needed for FlashQLA CUDA kernel compilation (Python.h)
 RUN apt-get update && apt-get install -y --no-install-recommends \
         software-properties-common \
     && add-apt-repository ppa:deadsnakes/ppa -y \
     && apt-get update && apt-get install -y --no-install-recommends \
-        python3.11 python3.11-venv libpython3.11 \
+        python3.11 python3.11-venv python3.11-dev libpython3.11 \
         curl build-essential ninja-build \
     && rm -rf /var/lib/apt/lists/*
 
