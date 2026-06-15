@@ -75,17 +75,22 @@ ENV PATH="/usr/local/cuda/bin:${PATH}"
 
 # Install runtime dependencies (Python 3.11 via deadsnakes PPA)
 # python3.11-dev needed for FlashQLA CUDA kernel compilation (Python.h)
+# libcuda stub needed for Triton compilation at runtime
 RUN apt-get update && apt-get install -y --no-install-recommends \
         software-properties-common \
     && add-apt-repository ppa:deadsnakes/ppa -y \
     && apt-get update && apt-get install -y --no-install-recommends \
         python3.11 python3.11-venv python3.11-dev libpython3.11 \
         curl build-essential ninja-build \
-    && rm -rf /var/lib/apt/lists/*
+    && rm -rf /var/lib/apt/lists/* \
+    && ln -sf /usr/local/cuda/lib64/stubs/libcuda.so /usr/lib/x86_64-linux-gnu/libcuda.so.1
 
 # Copy Python environment (with fixed editable paths)
 COPY --from=builder /build/.venv /opt/venv
 ENV PATH="/opt/venv/bin:${PATH}"
+
+# Fix prometheus_fastapi_instrumentator compatibility issue
+RUN pip install --no-cache-dir prometheus_fastapi_instrumentator==7.0.0
 
 # Copy only necessary source files (not build cache)
 COPY --from=builder /build/vllm /opt/vllm/vllm
