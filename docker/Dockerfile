@@ -54,7 +54,7 @@ RUN uv pip install -r requirements/cuda.txt --torch-backend=cu128
 
 # Build vLLM (editable install so __file__ resolves correctly)
 # SETUPTOOLS_SCM_PRETEND_VERSION needed because .git is excluded by .dockerignore
-ENV SETUPTOOLS_SCM_PRETEND_VERSION=0.1.6
+ENV SETUPTOOLS_SCM_PRETEND_VERSION=0.1.7.dev2
 RUN uv pip install --no-build-isolation -e .
 
 # Fix editable install paths: /build -> /opt/vllm (for runtime stage)
