@@ -89,11 +89,6 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 COPY --from=builder /build/.venv /opt/venv
 ENV PATH="/opt/venv/bin:${PATH}"
 
-# Fix prometheus_fastapi_instrumentator compatibility issue
-RUN /opt/venv/bin/python -m pip install --no-cache-dir prometheus_fastapi_instrumentator==7.0.0 || \
-    /opt/venv/bin/python -m ensurepip && \
-    /opt/venv/bin/python -m pip install --no-cache-dir prometheus_fastapi_instrumentator==7.0.0
-
 # Copy only necessary source files (not build cache)
 COPY --from=builder /build/vllm /opt/vllm/vllm
 COPY --from=builder /build/csrc /opt/vllm/csrc
