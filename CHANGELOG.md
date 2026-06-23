@@ -3,6 +3,20 @@
 This changelog tracks the fork release version for vLLM 2080 Ti Definitive
 Edition. It is separate from the upstream vLLM package version.
 
+## v0.1.7 - 2026-06-23
+
+- Fixes `prometheus_fastapi_instrumentator` compatibility error with FastAPI
+  0.137.1/Starlette 0.52.1 by wrapping Instrumentator setup in try-except.
+- Simplifies Docker deployment configuration by removing unnecessary NCCL
+  environment variables and using default entrypoint.sh.
+- Adds `ipc: host` to Docker Compose for proper shared memory communication
+  between multiprocess workers.
+- Adds `docker-compose-fast.yml` for INT8 KV Cache (Fast Profile) testing.
+- Adds auto tool choice support for OpenCode/Codex integration.
+- Cleans up project structure: removes empty directories, log residue, backup
+  files, and fixes filename typo in deployments/glm/glm47/.
+- Removes obsolete planning documents from `docs/superpowers/plans/`.
+
 ## v0.1.6 - 2026-06-09
 
 - Adds explicit W8A8 checkpoint support documentation for the Quark INT8 route,

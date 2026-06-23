@@ -95,8 +95,10 @@ real benchmark or smoke result that proves the changed path still works.
 │
 ├── docker/                     # ★ Docker 配置
 │   ├── Dockerfile              #   多阶段构建（CI 通过 file: docker/Dockerfile 引用）
-│   ├── docker-compose.yml      #   服务编排（docker compose -f docker/docker-compose.yml）
-│   └── docker-entrypoint.sh    #   容器入口脚本
+│   ├── docker-compose.yml      #   服务编排 Safe Profile（docker compose -f docker/docker-compose.yml）
+│   ├── docker-compose-fast.yml #   Fast Profile（INT8 KV Cache）
+│   ├── docker-entrypoint.sh    #   容器入口脚本
+│   └── chat_template_no_thinking.jinja  # 禁用 thinking 的聊天模板
 │
 ├── deployments/                # ★ 各部署项目（每个子目录独立）
 │   ├── qwen/                   #   Qwen 系列部署配置
