@@ -57,7 +57,7 @@ services:
 
   # vLLM FlashQLA service (GPTQ-Int4, FP16 KV, MTP3)
   vllm:
-    image: hotwa/vllm-2080ti-flashqla:main
+    image: hotwa/vllm-2080ti-flashqla:local
     container_name: vllm-2080ti
     restart: unless-stopped
     ipc: host

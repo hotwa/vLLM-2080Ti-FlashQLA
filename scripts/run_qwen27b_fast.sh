@@ -6,7 +6,7 @@ set -euo pipefail
 # WARNING: 这是性能/容量路线，用于测试，不作为默认生产服务
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-cd "$SCRIPT_DIR"
+cd "$SCRIPT_DIR/.."
 
 # === SM75 Runtime Environment (from launcher.sh set_sm75_runtime_env) ===
 export CUDA_HOME="${CUDA_HOME:-/usr/local/cuda-12.8}"

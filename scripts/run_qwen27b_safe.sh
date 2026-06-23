@@ -5,7 +5,7 @@ set -euo pipefail
 # Profile: INT4 + FP16 KV + MTP3 + 256K context + text-only
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-cd "$SCRIPT_DIR"
+cd "$SCRIPT_DIR/.."
 
 # 环境变量
 export PROFILE="qwen27b/safe/int4/fp16kv-256K-mtp3-text-only.env"

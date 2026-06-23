@@ -16,7 +16,10 @@ uv.lock
 # Build, runtime, and benchmark outputs
 build-logs/
 run-logs/
-logs/
+/repos/
+/run/
+/logs/
+.hf-cache/
 *.log
 *.csv
 *.jsonl
@@ -75,22 +78,21 @@ backups/
 *.swp
 *.swo
 
-# Project specific
-glm46v/tailscale
-IQuest-Coder/instruct/tailscale
-glm/glm46v/tailscale
+# Project specific (deployment directories now under deployments/)
+deployments/glm/glm46v/tailscale
+deployments/IQuest-Coder/instruct/tailscale
 /srv/project/vllm/ikllama/gguf
-/CoPaw-ik/hf-cache/
-/CoPaw-ik/logs/
-/CoPaw-ik/llama.log
-/qwen36-a3b-ikllama-dual2080ti/.venv/
-/qwen36-a3b-ikllama-dual2080ti/artifacts/
-/qwen36-a3b-ikllama-dual2080ti/logs/
-/qwen36-a3b-ikllama-dual2080ti/llama.log
+deployments/CoPaw-ik/hf-cache/
+deployments/CoPaw-ik/logs/
+deployments/CoPaw-ik/llama.log
+deployments/qwen36-a3b-ikllama-dual2080ti/.venv/
+deployments/qwen36-a3b-ikllama-dual2080ti/artifacts/
+deployments/qwen36-a3b-ikllama-dual2080ti/logs/
+deployments/qwen36-a3b-ikllama-dual2080ti/llama.log
 /docs/
 /qwen36-dflash/
-/qwen/.hf-cache/
-qwen/fixed_tokenizer/
+deployments/qwen/.hf-cache/
+deployments/qwen/fixed_tokenizer/
 
 # Ignore all .env files (contain secrets)
 **/.env

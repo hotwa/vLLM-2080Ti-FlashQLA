@@ -2,73 +2,58 @@ services:
   glmserver:
     build:
       context: .
-      dockerfile: Dockerfile.night
-      # args:
-      #   CUDA_IMAGE: "nvidia/cuda:13.0.1-devel-ubuntu24.04"
-    image: hotwa/vllm:nightly
+      dockerfile: Dockerfile
+      args:
+        CUDA_IMAGE: "nvidia/cuda:13.0.1-devel-ubuntu24.04"
+    image: hotwa/vllm:latest
     container_name: glmserver
     volumes:
       - ~/.cache/huggingface:/root/.cache/huggingface
+      - /usr/lib/wsl/lib/libcuda.so.1:/usr/lib/x86_64-linux-gnu/libcuda.so.1:ro
+      - /usr/lib/wsl/lib/libcuda.so:/usr/lib/x86_64-linux-gnu/libcuda.so:ro
     env_file:
       - ./.env
+    entrypoint: ["python3", "-m", "vllm.entrypoints.openai.api_server"]
     command:
       - "--model"
-      - "cyankiwi/GLM-4.7-Flash-AWQ-4bit"
+      - "unsloth/GLM-4.7-Flash-FP8-Dynamic"
       - "--served-model-name"
       - "glm-4.7-flash"
       - "--dtype"
-      - "half"
-      - "--attention-backend"
-      - "FLASHINFER"
-      - "--tensor-parallel-size"
-      - "2"
+      - "auto"
+      - "--seed"
+      - "3407"
       - "--max-model-len"
-      - "16384"
-      - "--max-num-seqs"
-      - "1"
+      - "202752"
       - "--gpu-memory-utilization"
       - "0.95"
+      - "--max-num-batched-tokens"
+      - "16384"
       - "--tool-call-parser"
       - "glm47"
       - "--reasoning-parser"
       - "glm45"
       - "--enable-auto-tool-choice"
-      - "--distributed-executor-backend"
-      - "mp"
       - "--host"
       - "0.0.0.0"
       - "--port"
       - "8000"
-      - "--enforce-eager"
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
     environment:
-      # - VLLM_ENFORCE_EAGER=1
-      # - VLLM_DISABLE_CUDAGRAPH=1
       - NVIDIA_VISIBLE_DEVICES=all
-      - CUDA_VISIBLE_DEVICES=0,1
       - VLLM_ALLOW_LONG_MAX_MODEL_LEN=1
-      - HF_HUB_ENABLE_HF_TRANSFER=0
-      - VLLM_MLA_DISABLE=1
-      - VLLM_DISABLE_FLASH_ATTN=1
-      - VLLM_USE_FLASH_ATTN=0
-      - NCCL_P2P_LEVEL=NVL
-      # - NCCL_DEBUG=INFO
-      - NCCL_P2P_DISABLE=1
-      - NCCL_SHM_DISABLE=0
-      - NCCL_IB_DISABLE=1
-      - PYTORCH_ALLOC_CONF=expandable_segments:True
     tty: true
     shm_size: "16gb"
     ulimits:
       memlock: -1
       stack: 67108864
     restart: unless-stopped
-    deploy:
-      resources:
-        reservations:
-          devices:
-            - driver: nvidia
-              count: 2
-              capabilities: [gpu]
     healthcheck:
       test: ["CMD-SHELL", "curl -fsS http://127.0.0.1:8000/ping >/dev/null"]
       interval: 5s

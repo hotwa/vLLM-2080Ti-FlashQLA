@@ -1,0 +1,50 @@
+# Fast Profile - INT8 KV Cache for maximum speed
+# WARNING: 性能/容量路线，用于测试，不作为默认生产服务
+
+services:
+  vllm:
+    image: hotwa/vllm-2080ti-flashqla:local
+    container_name: vllm-2080ti
+    restart: unless-stopped
+    ipc: host
+    ports:
+      - "${VLLM_HOST_PORT:-8000}:8000"
+    volumes:
+      - /data/models:/models:ro
+      - vllm-torch-cache:/tmp/torch_extensions_cache
+      - vllm-triton-cache:/tmp/triton-cache
+      - vllm-inductor-cache:/tmp/torchinductor-cache
+    environment:
+      - MODEL_DIR=/models/Qwen3.6-27B-GPTQ-Int4
+      - PORT=8000
+      - TORCH_CUDA_ARCH_LIST=7.5
+      - CUDA_DEVICE_ORDER=PCI_BUS_ID
+      - FLASHINFER_ENABLE_AOT=1
+      - VLLM_SM75_SPEC_SYNC_MODE=nosync
+      - VLLM_ALLOW_MAMBA_SPEC_FULL_CUDAGRAPH=1
+      - DISABLE_LOG_STATS=1
+      - VLLM_QWOPUS_MTP_BF16_DRAFT=1
+      - NCCL_DEBUG=WARN
+      - PYTHONUNBUFFERED=1
+      # Fast Profile INT8 KV Cache 环境变量
+      - VLLM_INT8KV_FA_PREFILL=1
+      - VLLM_INT8KV_FA_CONTINUATION_DEQUANT=1
+      - VLLM_INT8KV_FA_CASCADE_DEQUANT=1
+      - VLLM_INT8KV_FA_CASCADE_TILE_TOKENS=65536
+    command: >
+      --kv-cache-dtype int8_per_token_head
+    ulimits:
+      memlock: -1
+      stack: 67108864
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 2
+              capabilities: [gpu]
+
+volumes:
+  vllm-torch-cache:
+  vllm-triton-cache:
+  vllm-inductor-cache:
